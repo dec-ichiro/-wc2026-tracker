@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>2026 WORLD CUP — Match Viewing Tracker</title>
+<style>
+  :root{
+    --pitch:#0a3d2e;        /* 深いピッチグリーン */
+    --pitch-2:#0d4a37;
+    --line:#1f5d48;
+    --chalk:#f4f6f1;        /* ライン白 */
+    --chalk-dim:#a9c0b4;
+    --gold:#e9b949;         /* トロフィーゴールド */
+    --gold-dim:#8a7331;
+    --flare:#ff5a3c;        /* インパクト記録の差し色 */
+    --flare-soft:#ff8b76;
+    --watched:#2bd47b;      /* 視聴済み */
+    --card:#0f4736;
+    --card-2:#12543f;
+    --shadow:rgba(0,0,0,.35);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    /* 今日の主役国カラー（JSで設定。初期値はピッチグリーン系）*/
+    --team-1:#0a3d2e;
+    --team-2:#11543e;
+    /* 全面背景用のダークトーン（JSで主役国カラーから生成）*/
+    --team-dark1:#12603f;
+    --team-dark2:#0a3d2e;
+    --team-deep:#06241b;
+    background-color:var(--pitch);
+    background-image:
+      /* 上部のゴールド・グロー（トロフィーの輝き） */
+      radial-gradient(90% 50% at 50% -8%, rgba(233,185,73,.18) 0%, rgba(233,185,73,0) 60%),
+      /* ピッチの芝ストライプ */
+      repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 38px, rgba(0,0,0,.012) 38px, rgba(0,0,0,.012) 76px),
+      /* 全体のピッチグラデーション */
+      radial-gradient(130% 70% at 50% -10%, #12603f 0%, var(--pitch) 50%, #06241b 100%);
+    background-attachment:fixed;
+    color:var(--chalk);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    min-height:100vh;
+    padding-bottom:calc(82px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+  }
+  /* 今日の主役国カラーで全面を染める（ピッチの上・コンテンツの下）*/
+  #team-bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    transition:background 1s ease, opacity 1s ease;
+    background:
+      /* 上部のゴールド・グロー（トロフィーの輝きは維持）*/
+      radial-gradient(90% 45% at 50% -8%, rgba(233,185,73,.16) 0%, rgba(233,185,73,0) 55%),
+      /* 主役国カラーの全面グラデーション（濃淡2色）*/
+      linear-gradient(160deg, var(--team-dark1) 0%, var(--team-dark2) 55%, var(--team-deep) 100%);
+    opacity:1;
+  }
+  /* 国旗パターンのレイヤー（薄く敷く・文字の可読性を保つ）*/
+  #flag-bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    transition:background 1s ease, opacity 1s ease;
+    opacity:.22;
+    background-repeat:no-repeat;background-size:cover;background-position:center;
+    -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.35) 42%, rgba(0,0,0,.12) 100%);
+            mask-image:linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.35) 42%, rgba(0,0,0,.12) 100%);
+  }
+  /* ピッチのセンターサークル等のライン（背景・装飾）*/
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+    background-image:
+      /* センターサークル */
+      radial-gradient(circle at 50% 30%, transparent 78px, rgba(244,246,241,.06) 79px, rgba(244,246,241,.06) 81px, transparent 82px),
+      /* センターライン */
+      linear-gradient(0deg, transparent calc(30% - 1px), rgba(244,246,241,.05) 30%, transparent calc(30% + 1px));
+    background-repeat:no-repeat;
+  }
+  main,header,nav{position:relative;z-index:1;}
+  /* 白基調テーマ（日本など）：文字色を暗色へ反転して可読性を確保 */
+  body.light-theme{ --chalk:#1a2228; --chalk-dim:#5a6b73; }
+  body.light-theme .wc-title .wc{ filter:none; }
+  body.light-theme .stat,
+  body.light-theme .today-nation{ background:rgba(255,255,255,.55); }
+  body.light-theme .stat b{ color:#bc002d; }
+  body.light-theme .ltable thead th{ background:rgba(0,0,0,.06); color:#9a2030; border-bottom-color:#bc002d; }
+  body.light-theme .ltable tbody tr:nth-child(even) td{ background:rgba(0,0,0,.035); }
+  body.light-theme td.pts{ color:#bc002d; background:rgba(188,0,45,.07); }
+  body.light-theme .kicker{ color:#9a2030; }
+  body.light-theme .kicker::before,
+  body.light-theme .kicker::after{ background:#c98a8a; }
+  body.light-theme .gm-row{ background:rgba(255,255,255,.4); }
+  body.light-theme .gm-watched{ background:rgba(43,160,90,.14); }
+  body.light-theme #team-bg{ opacity:.85; }
+  body.light-theme .leader-chip{ color:#9a2030; border-color:#c98a8a; background:rgba(188,0,45,.08); }
+  body.light-theme .section-label{ color:#9a2030; }
+  body.light-theme .qbadge.third{ color:#8a6d1a; }
+  body.light-theme .grp-foot,
+  body.light-theme .gm-label{ color:#5a6b73; }
+  body.light-theme .meta-watch{ color:#1f8a52; }
+  /* ===== ヘッダー ===== */
+  header{
+    padding:calc(env(safe-area-inset-top) + 22px) 18px 16px;
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";position:absolute;left:50%;bottom:-118px;transform:translateX(-50%);
+    width:170px;height:170px;border:2px solid rgba(244,246,241,.10);border-radius:50%;
+  }
+  .kicker{
+    font-size:10px;letter-spacing:.34em;color:var(--gold);
+    text-transform:uppercase;font-weight:700;margin:0 0 8px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .kicker::before,.kicker::after{content:"";width:22px;height:1px;background:var(--gold-dim);}
+  .wc-title{
+    margin:0;line-height:.92;letter-spacing:.01em;
+    font-weight:900;
+  }
+  .wc-title .yr{
+    display:block;font-size:15px;letter-spacing:.42em;color:var(--gold);
+    font-weight:800;margin-bottom:3px;text-indent:.42em;
+  }
+  .wc-title .wc{
+    display:block;font-size:42px;font-weight:900;
+    background:linear-gradient(180deg,#fbe7a6 0%,var(--gold) 48%,#b88a2a 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    text-shadow:0 2px 14px rgba(233,185,73,.25);
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.3));
+  }
+  .wc-sub{
+    font-size:12px;color:var(--chalk);margin:9px 0 0;letter-spacing:.22em;
+    text-transform:uppercase;font-weight:700;opacity:.82;
+  }
+  .wc-hosts{
+    font-size:11px;color:var(--chalk-dim);margin-top:7px;letter-spacing:.05em;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .wc-hosts .flag{font-size:14px;}
+  .today-nation{
+    margin-top:11px;font-size:11px;font-weight:700;color:var(--chalk);
+    display:inline-flex;align-items:center;gap:7px;
+    background:rgba(0,0,0,.28);border:1px solid var(--line);
+    padding:5px 13px;border-radius:999px;letter-spacing:.02em;
+  }
+  .today-nation .tn-flag{font-size:16px;}
+  .today-nation .tn-label{color:var(--gold);font-weight:800;font-size:9px;letter-spacing:.12em;}
+  .today-nation:empty{display:none;}
+  .stat-row{
+    display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap;
+  }
+  .stat{
+    background:rgba(0,0,0,.22);border:1px solid var(--line);
+    border-radius:999px;padding:5px 13px;font-size:12px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .stat b{color:var(--gold);font-size:14px;}
+  .stat.flare b{color:var(--flare-soft);}
+  .fetch-btn{
+    background:rgba(43,212,123,.12);border:1px solid var(--watched);color:var(--watched);
+    font-family:inherit;font-weight:700;font-size:12px;border-radius:999px;
+    padding:7px 18px;transition:.15s;
+  }
+  .fetch-btn:active{transform:scale(.96);}
+  .fetch-btn.loading{opacity:.6;}
+  .fetch-status{
+    font-size:10.5px;color:var(--chalk-dim);margin-top:7px;min-height:13px;letter-spacing:.02em;
+  }
+  .fetch-status.err{color:var(--flare-soft);}
+  .auto-tag{
+    font-size:8px;font-weight:800;color:var(--watched);background:rgba(43,212,123,.14);
+    padding:1px 5px;border-radius:4px;margin-left:5px;letter-spacing:.04em;vertical-align:middle;
+  }
+
+  /* ===== タブ（下部固定） ===== */
+  nav{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    background:rgba(7,33,25,.94);backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+    display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  nav button{
+    flex:1;background:none;border:none;color:var(--chalk-dim);
+    font-size:10.5px;font-family:inherit;padding:5px 2px;border-radius:10px;
+    display:flex;flex-direction:column;align-items:center;gap:3px;font-weight:600;
+    transition:color .15s,background .15s;
+  }
+  nav button .ic{font-size:19px;line-height:1;}
+  nav button.active{color:var(--gold);background:rgba(233,185,73,.10);}
+
+  main{padding:6px 14px 0;max-width:680px;margin:0 auto;}
+  .view{display:none;animation:fade .25s ease;}
+  .view.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  /* ===== PC（広い画面）向けレイアウト ===== */
+  @media (min-width:900px){
+    main{max-width:1080px;padding:10px 28px 0;}
+    /* ヘッダーをゆったり */
+    .wc-title .wc{font-size:54px;}
+    .wc-sub{font-size:14px;}
+    /* 下部ナビを中央寄せの浮遊バーに */
+    nav{
+      left:50%;right:auto;transform:translateX(-50%);
+      bottom:16px;width:auto;border-radius:16px;
+      border:1px solid var(--line);padding:8px 10px;
+      box-shadow:0 8px 30px rgba(0,0,0,.4);gap:4px;
+    }
+    nav button{min-width:104px;padding:8px 14px;border-radius:11px;font-size:12px;}
+    nav button .ic{font-size:20px;}
+    /* 順位表を2カラムに（開閉に関わらずタイル状） */
+    #groups-container{
+      display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;
+    }
+    /* 表示切替バーと日付ヘッダは全幅 */
+    #groups-container .view-toggle{grid-column:1 / -1;max-width:360px;}
+    #groups-container .dayhdr{grid-column:1 / -1;}
+    #groups-container .date-mode{grid-column:1 / -1;}
+    .grp{margin-bottom:0;}
+    /* データタブのカードを2カラムに */
+    #view-data{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+    #view-data .section-label{grid-column:1 / -1;}
+    #view-data .data-card{margin-bottom:0;}
+    /* テーマプレビューは6列に */
+    .theme-preview{grid-template-columns:repeat(6,1fr);}
+    /* トーナメント表はゆったり見せる */
+    #knockout-container{overflow-x:auto;}
+  }
+  /* さらに広い画面：順位表を3カラム */
+  @media (min-width:1320px){
+    main{max-width:1320px;}
+    #groups-container{grid-template-columns:1fr 1fr 1fr;}
+  }
+
+  .section-label{
+    font-size:11px;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;
+    font-weight:700;margin:20px 2px 10px;display:flex;align-items:center;gap:8px;
+  }
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  /* ===== グループ表 ===== */
+  .grp{
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:var(--radius);
+    margin-bottom:14px;overflow:hidden;box-shadow:0 6px 18px var(--shadow);
+  }
+  .grp-done{border-color:var(--gold-dim);}
+  .grp-head{
+    padding:11px 14px;display:flex;align-items:center;justify-content:space-between;
+    cursor:pointer;background:rgba(0,0,0,.16);gap:8px;
+  }
+  .grp-head .gname{font-weight:800;font-size:15px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .gbadge{
+    background:var(--gold);color:#0a2a1f;width:25px;height:25px;border-radius:7px;
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex:none;
+  }
+  .leader-chip{
+    font-size:10.5px;font-weight:700;color:var(--gold);background:rgba(233,185,73,.12);
+    border:1px solid var(--gold-dim);padding:2px 8px;border-radius:999px;letter-spacing:.02em;
+  }
+  .grp-head .meta{font-size:11px;color:var(--chalk-dim);white-space:nowrap;flex:none;}
+  .meta-done{color:var(--gold);font-weight:800;}
+  /* 本格リーグ表 */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  table.ltable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:380px;}
+  .ltable thead th{
+    font-size:9px;color:var(--gold);font-weight:700;letter-spacing:.05em;
+    padding:8px 3px;text-align:center;border-bottom:2px solid var(--gold-dim);
+    background:rgba(0,0,0,.24);white-space:nowrap;
+  }
+  .ltable thead th.tl{text-align:left;padding-left:8px;}
+  .ltable thead th.rk{width:30px;}
+  .ltable thead th.pts-h{color:var(--gold);}
+  .ltable thead th.gd-h,.ltable thead th.form-h{color:var(--chalk-dim);}
+  .ltable tbody td{padding:9px 3px;text-align:center;border-bottom:1px solid rgba(31,93,72,.4);
+    font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .ltable tbody tr:nth-child(even) td{background:rgba(0,0,0,.10);}
+  .ltable tbody tr:last-child td{border-bottom:none;}
+  td.rk{width:30px;position:relative;}
+  .rk-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:21px;height:21px;border-radius:6px;font-weight:800;font-size:12px;
+    color:var(--chalk-dim);background:rgba(0,0,0,.28);
+  }
+  .rk-num.rk-q-auto{background:var(--watched);color:#06281a;}
+  .rk-num.rk-q-third{background:var(--gold);color:#2a1f06;}
+  td.team{text-align:left;padding-left:8px;font-weight:700;}
+  td.team .flag{font-size:16px;line-height:1;width:20px;text-align:center;flex:none;display:inline-block;vertical-align:middle;margin-right:5px;}
+  .qdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:5px;vertical-align:middle;}
+  .qdot.auto{background:var(--watched);}
+  .qdot.third{background:var(--gold);}
+  td.gd{color:var(--chalk-dim);font-weight:600;}
+  td.pts{font-weight:900;color:var(--gold);font-size:14px;background:rgba(233,185,73,.07);}
+  /* 近況フォーム（直近5試合）*/
+  td.form{padding-right:8px;}
+  .fm{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+    border-radius:4px;font-size:9px;font-weight:900;color:#fff;margin-left:2px;}
+  .fm-W{background:var(--watched);color:#06281a;}
+  .fm-D{background:#6b7c74;}
+  .fm-L{background:var(--flare);}
+  .fm-none{color:var(--chalk-dim);font-size:11px;}
+  /* 突破ゾーンの行ハイライト＋左アクセントバー */
+  tr.q-auto td.rk::before,tr.q-third td.rk::before{
+    content:"";position:absolute;left:0;top:4px;bottom:4px;width:3px;border-radius:0 2px 2px 0;
+  }
+  tr.q-auto td.rk::before{background:var(--watched);}
+  tr.q-third td.rk::before{background:var(--gold);}
+  tr.q-auto td{background:rgba(43,212,123,.06);}
+  tr.q-third td{background:rgba(233,185,73,.05);}
+  tr.first td{background:rgba(43,212,123,.12);}
+  /* 突破ラインの区切り（2位の下＝実線、3位の下＝破線）*/
+  tr.cut-auto td{border-bottom:2px solid var(--watched);}
+  tr.cut-third td{border-bottom:2px dashed var(--gold-dim);}
+  .qbadge{
+    font-size:8.5px;font-weight:800;padding:2px 6px;border-radius:5px;letter-spacing:.03em;
+    margin-left:4px;flex:none;white-space:nowrap;
+  }
+  .qbadge.auto{background:rgba(43,212,123,.18);color:#7ef0b3;border:1px solid rgba(43,212,123,.4);}
+  .qbadge.third{background:rgba(233,185,73,.16);color:var(--gold);border:1px solid var(--gold-dim);}
+  .grp-foot{
+    padding:10px 14px;font-size:10px;color:var(--chalk-dim);
+    border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px;
+    background:rgba(0,0,0,.12);
+  }
+  .grp-foot span{display:flex;align-items:center;gap:7px;}
+
+  /* 表示切替（グループ別 / 日付順） */
+  .view-toggle{
+    display:flex;gap:6px;background:rgba(0,0,0,.22);border:1px solid var(--line);
+    border-radius:999px;padding:4px;margin-bottom:14px;
+  }
+  .vt-btn{
+    flex:1;font-family:inherit;font-size:12px;font-weight:700;border:none;
+    background:none;color:var(--chalk-dim);padding:8px;border-radius:999px;transition:.15s;
+  }
+  .vt-btn.active{background:var(--gold);color:#0a2a1f;}
+  .meta-watch{color:var(--watched);font-weight:700;}
+
+  /* リーグ表内の試合リスト */
+  .grp-matches{
+    border-top:1px solid var(--line);padding:10px 10px 12px;background:rgba(0,0,0,.10);
+  }
+  .grp-matches.date-mode{border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.12);margin-bottom:10px;}
+  .gm-label{font-size:10px;color:var(--chalk-dim);font-weight:700;letter-spacing:.04em;margin:2px 2px 8px;}
+  .gm-row{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:9px 10px;border-radius:9px;background:rgba(0,0,0,.18);
+    border:1px solid transparent;margin-bottom:6px;cursor:pointer;transition:.13s;
+  }
+  .gm-row:last-child{margin-bottom:0;}
+  .gm-row:active{transform:scale(.99);}
+  .gm-watched{background:rgba(43,212,123,.10);border-color:rgba(43,212,123,.4);}
+  .gm-main{display:flex;align-items:center;gap:7px;flex:1;min-width:0;font-size:12.5px;font-weight:600;}
+  .gm-date,.gm-grp{
+    font-size:9px;font-weight:800;color:var(--chalk-dim);background:rgba(0,0,0,.25);
+    padding:2px 6px;border-radius:5px;flex:none;min-width:34px;text-align:center;line-height:1.3;
+  }
+  .gm-jst{font-size:10px;color:var(--gold);font-weight:900;letter-spacing:.02em;}
+  .gm-grp{color:var(--gold);background:rgba(233,185,73,.12);}
+  .gm-team{display:flex;align-items:center;gap:4px;flex:1;min-width:0;}
+  .gm-team .flag{font-size:14px;width:18px;}
+  .gm-team.h{justify-content:flex-end;text-align:right;}
+  .gm-team.a{justify-content:flex-start;}
+  .gm-team>span:not(.flag){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .gm-score{font-weight:800;color:var(--gold);font-size:13px;flex:none;min-width:34px;text-align:center;}
+  .gm-score i{color:var(--chalk-dim);font-style:normal;margin:0 1px;}
+  .gm-score i.vs{font-size:10px;font-weight:600;}
+  .gm-marks{display:flex;align-items:center;gap:6px;flex:none;}
+  .gm-auto{font-size:8px;font-weight:800;color:var(--watched);background:rgba(43,212,123,.14);padding:1px 5px;border-radius:4px;}
+  .gm-imp{font-size:10px;font-weight:700;color:var(--flare-soft);}
+  .gm-eye{font-size:9.5px;font-weight:800;color:var(--watched);white-space:nowrap;}
+  .gm-tap{font-size:10px;font-weight:700;color:var(--chalk-dim);white-space:nowrap;}
+
+  /* モーダル内 視聴トグル */
+  .watch-toggle{
+    width:100%;display:flex;align-items:center;gap:10px;margin-top:14px;
+    font-family:inherit;font-size:13.5px;font-weight:700;color:var(--chalk-dim);
+    background:rgba(0,0,0,.2);border:1px solid var(--line);border-radius:11px;padding:12px 14px;
+    transition:.15s;
+  }
+  .watch-toggle .wt-box{
+    width:22px;height:22px;border-radius:6px;border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent;flex:none;
+  }
+  .watch-toggle.on{background:rgba(43,212,123,.14);border-color:var(--watched);color:#8ff5be;}
+  .watch-toggle.on .wt-box{background:var(--watched);border-color:var(--watched);color:#06281a;}
+
+  /* ===== 試合カード ===== */
+  .daygroup{margin-bottom:6px;}
+  .dayhdr{
+    font-size:12px;font-weight:700;color:var(--gold);
+    margin:18px 2px 9px;letter-spacing:.04em;display:flex;align-items:center;gap:8px;
+  }
+  .dayhdr small{color:var(--chalk-dim);font-weight:500;font-size:11px;}
+  .match{
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:9px;
+    box-shadow:0 4px 12px var(--shadow);position:relative;
+  }
+  .match.watched{border-color:rgba(43,212,123,.55);}
+  .match.watched::before{
+    content:"視聴済";position:absolute;top:-1px;right:11px;
+    background:var(--watched);color:#06281a;font-size:9px;font-weight:800;
+    padding:3px 8px;border-radius:0 0 7px 7px;letter-spacing:.05em;
+  }
+  .m-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .m-grp{
+    font-size:9.5px;font-weight:800;color:var(--gold);
+    background:rgba(233,185,73,.12);padding:2px 7px;border-radius:5px;flex:none;
+  }
+  .m-time{font-size:10.5px;color:var(--chalk-dim);}
+  .m-teams{display:flex;align-items:center;gap:6px;margin:10px 0 4px;}
+  .m-side{flex:1;display:flex;align-items:center;gap:7px;font-weight:700;font-size:14px;}
+  .m-side.away{flex-direction:row-reverse;text-align:right;}
+  .m-vs{font-size:10px;color:var(--chalk-dim);font-weight:600;flex:none;}
+  .m-score{
+    font-weight:800;font-size:15px;color:var(--gold);min-width:20px;text-align:center;
+  }
+  .m-actions{display:flex;gap:7px;margin-top:11px;}
+  .m-actions button{
+    flex:1;font-family:inherit;font-size:11.5px;font-weight:700;
+    border-radius:9px;padding:8px 4px;border:1px solid var(--line);
+    background:rgba(0,0,0,.18);color:var(--chalk);transition:.15s;
+  }
+  .m-actions button.on-watch{background:var(--watched);color:#06281a;border-color:var(--watched);}
+  .m-actions button.impact{color:var(--flare-soft);border-color:rgba(255,90,60,.4);}
+  .m-actions button.impact.has{background:var(--flare);color:#fff;border-color:var(--flare);}
+  .m-impact-preview{
+    margin-top:9px;padding:8px 10px;background:rgba(255,90,60,.10);
+    border-left:3px solid var(--flare);border-radius:0 8px 8px 0;font-size:12px;
+    color:var(--flare-soft);line-height:1.45;
+  }
+
+  /* ===== ノックアウト ===== */
+  .ko-note{font-size:12px;color:var(--chalk-dim);line-height:1.6;
+    background:rgba(0,0,0,.18);border:1px solid var(--line);border-radius:12px;
+    padding:13px 15px;margin-bottom:14px;}
+  .ko-note b{color:var(--watched);}
+
+  /* ロード・トゥ・ザ・ファイナル */
+  .road{
+    display:flex;gap:12px;align-items:stretch;margin-bottom:18px;
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:14px;padding:14px;
+  }
+  .road-trophy{
+    font-size:30px;display:flex;align-items:center;justify-content:center;
+    width:46px;flex:none;filter:grayscale(1) opacity(.5);transition:.4s;
+  }
+  .road-trophy.lit{filter:none;animation:trophyPulse 1.6s ease-in-out infinite;}
+  @keyframes trophyPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.15);}}
+  .road-rail{flex:1;display:flex;flex-direction:column;gap:7px;justify-content:center;}
+  .road-step{display:flex;align-items:center;gap:8px;font-size:10px;}
+  .rs-label{width:64px;flex:none;color:var(--chalk-dim);font-weight:700;}
+  .road-step.full .rs-label{color:var(--gold);}
+  .rs-bar{flex:1;height:5px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden;}
+  .rs-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--watched),var(--gold));
+    border-radius:3px;transition:width .5s ease;}
+  .rs-count{width:30px;text-align:right;flex:none;color:var(--chalk-dim);font-weight:700;}
+  .road-step.full .rs-count{color:var(--watched);}
+
+  /* チャンピオン枠 */
+  .champ-box{
+    margin:0 0 18px;text-align:center;padding:22px 16px;
+    background:radial-gradient(120% 100% at 50% 0%,rgba(233,185,73,.10),rgba(0,0,0,.14));
+    border:1px solid var(--gold-dim);border-radius:16px;position:relative;overflow:hidden;
+  }
+  .champ-box.crowned{
+    border-color:var(--gold);
+    background:radial-gradient(120% 120% at 50% 0%,rgba(233,185,73,.28),rgba(0,0,0,.1));
+    box-shadow:0 0 30px rgba(233,185,73,.25);animation:crownGlow 2s ease-in-out infinite;
+  }
+  @keyframes crownGlow{0%,100%{box-shadow:0 0 20px rgba(233,185,73,.2);}50%{box-shadow:0 0 38px rgba(233,185,73,.4);}}
+  .champ-cap{font-size:10px;letter-spacing:.3em;color:var(--gold);font-weight:800;}
+  .champ-team{font-size:24px;font-weight:900;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:10px;
+    color:var(--chalk-dim);}
+  .champ-box.crowned .champ-team{color:var(--gold);font-size:28px;}
+  .champ-team .flag{font-size:28px;}
+  .champ-hint{font-size:10.5px;color:var(--chalk-dim);margin-top:8px;}
+  .champ-confetti{font-size:18px;margin-top:8px;letter-spacing:6px;animation:floatUp 2.4s ease-in-out infinite;}
+  @keyframes floatUp{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+
+  /* ===== 中央：決勝・3位決定戦 ===== */
+  .br-center{display:flex;flex-direction:column;gap:12px;margin-bottom:6px;}
+  .br-final-head{font-size:14px;font-weight:800;color:var(--gold);margin:0 2px 8px;display:flex;justify-content:space-between;align-items:baseline;}
+  .br-final-head span{font-size:10px;color:var(--chalk-dim);font-weight:600;}
+  .br-third-head{font-size:12px;font-weight:700;color:var(--chalk-dim);margin:0 2px 8px;display:flex;justify-content:space-between;align-items:baseline;}
+  .br-third-head span{font-size:10px;}
+
+  .br-hint{
+    font-size:10.5px;color:var(--chalk-dim);text-align:center;margin:16px 0 10px;
+    background:rgba(0,0,0,.16);border:1px solid var(--line);border-radius:999px;padding:7px 12px;line-height:1.4;
+  }
+
+  /* ===== 山（左右）===== */
+  .br-half{margin-bottom:18px;}
+  .br-half-label{font-size:13px;font-weight:800;color:var(--gold);letter-spacing:.03em;margin:0 2px 9px;}
+  .br-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent;}
+  .br-scroll::-webkit-scrollbar{height:6px;}
+  .br-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px;}
+  .br-flow{display:flex;gap:14px;min-width:max-content;padding:2px;}
+  .br-col{display:flex;flex-direction:column;min-width:150px;}
+  .br-colhead{
+    font-size:9.5px;font-weight:800;color:var(--gold);letter-spacing:.06em;text-align:center;
+    background:rgba(233,185,73,.10);border:1px solid var(--gold-dim);border-radius:7px;
+    padding:5px;margin-bottom:8px;text-transform:uppercase;
+  }
+  /* 各列のセルは、ラウンドが進むほど縦間隔を広げて樹形に見せる */
+  .br-cells{display:flex;flex-direction:column;flex:1;justify-content:space-around;gap:8px;}
+  .col-r16 .br-cells{gap:34px;}
+  .col-qf .br-cells{gap:96px;}
+  .col-sf .br-cells{justify-content:center;}
+  .br-slot{position:relative;}
+  /* つなぎ線 */
+  .br-col:not(.col-r32) .br-slot::before{
+    content:"";position:absolute;left:-14px;top:50%;width:14px;height:1px;background:var(--line);
+  }
+  .br-col:not(.col-sf) .br-slot::after{
+    content:"";position:absolute;right:-14px;top:50%;width:14px;height:1px;background:var(--line);
+  }
+
+  /* ===== 試合カード ===== */
+  .br-card{
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:10px;padding:6px 7px;
+    box-shadow:0 3px 10px var(--shadow);transition:border-color .2s,box-shadow .2s;
+  }
+  .br-card.decided{border-color:rgba(43,212,123,.4);}
+  .br-card.live{border-color:var(--flare);box-shadow:0 0 0 1px rgba(255,90,60,.22),0 3px 12px rgba(255,90,60,.1);}
+  .br-card.rk-final{border-color:var(--gold);box-shadow:0 4px 20px rgba(233,185,73,.2);padding:9px;}
+  .br-card.rk-third{border-color:var(--line);}
+  .br-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;height:18px;}
+  .br-no{font-size:8.5px;font-weight:800;color:var(--chalk-dim);}
+  .br-3rd,.br-sc{
+    font-family:inherit;font-weight:800;border-radius:5px;padding:2px 7px;font-size:9px;line-height:1.2;
+  }
+  .br-3rd{color:var(--gold);background:rgba(233,185,73,.12);border:1px dashed var(--gold-dim);}
+  .br-sc{color:var(--chalk);background:rgba(0,0,0,.25);border:1px solid var(--line);min-width:24px;}
+  .br-team{
+    display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:7px;
+    background:rgba(0,0,0,.18);border:1px solid transparent;margin-top:4px;
+    font-size:12.5px;font-weight:700;min-height:34px;transition:.16s;
+  }
+  .br-team:first-of-type{margin-top:0;}
+  .br-card.rk-final .br-team{font-size:14.5px;padding:9px 10px;min-height:40px;}
+  .br-team:not(.tbd){cursor:pointer;}
+  .br-team:not(.tbd):active{transform:scale(.98);}
+  .br-flag{font-size:15px;line-height:1;flex:none;width:18px;text-align:center;}
+  .br-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .br-team.tbd .br-name{font-size:10px;font-weight:600;color:var(--chalk-dim);white-space:normal;line-height:1.25;}
+  .br-team.win{
+    background:linear-gradient(90deg,rgba(43,212,123,.24),rgba(43,212,123,.07));
+    border-color:var(--watched);animation:advance .4s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes advance{0%{transform:translateX(-6px);opacity:.4;}100%{transform:none;opacity:1;}}
+  .br-team.win .br-name{color:#8ff5be;}
+  .br-team.lose{opacity:.4;}
+  .br-team.lose .br-name{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.3);}
+  .br-pts{font-weight:900;font-size:14px;color:var(--gold);min-width:14px;text-align:center;}
+  .br-chk{color:var(--watched);font-weight:900;font-size:12px;}
+
+  /* 横向き（ランドスケープ）で大きく */
+  @media (orientation:landscape){
+    .br-col{min-width:170px;}
+    .br-team{font-size:13.5px;min-height:38px;}
+    .br-card.rk-final .br-team{font-size:16px;}
+  }
+
+  /* ノックアウト・スコア入力シート */
+  .ko-score-row{display:flex;align-items:center;gap:9px;margin:6px 0 4px;}
+  .kss-team{flex:1;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px;justify-content:center;}
+  .kss-team.away{flex-direction:row-reverse;}
+  .ko-score-row input{
+    width:50px;text-align:center;font-size:20px;font-weight:800;color:var(--gold);
+    background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;
+    padding:8px 0;font-family:inherit;flex:none;
+  }
+  .ko-score-row .dash{color:var(--chalk-dim);font-weight:700;flex:none;}
+
+  /* 3位選択シート */
+  .sheet-title{font-size:15px;font-weight:800;margin:2px 0 4px;}
+  .sheet-sub{font-size:11px;color:var(--chalk-dim);line-height:1.5;margin-bottom:14px;}
+  .opt-list{display:flex;flex-direction:column;gap:8px;}
+  .opt{
+    font-family:inherit;font-size:13.5px;font-weight:700;text-align:left;
+    padding:13px 14px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(0,0,0,.2);color:var(--chalk);
+  }
+  .opt:disabled{opacity:.4;}
+  .opt.clear{color:var(--chalk-dim);border-style:dashed;font-weight:600;}
+  .sheet-save{width:100%;margin-top:14px;font-family:inherit;font-weight:800;font-size:14px;
+    border-radius:11px;padding:13px;border:none;background:var(--gold);color:#0a2a1f;}
+
+  /* ===== インパクト一覧 ===== */
+  .impact-empty,.log-empty{
+    text-align:center;color:var(--chalk-dim);font-size:13px;line-height:1.7;
+    padding:40px 20px;
+  }
+  .impact-empty .big,.log-empty .big{font-size:34px;margin-bottom:10px;}
+  .imp-card{
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-left:4px solid var(--flare);
+    border-radius:0 12px 12px 0;padding:12px 14px;margin-bottom:10px;
+    box-shadow:0 4px 12px var(--shadow);
+  }
+  .imp-card .ic-match{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .imp-card .ic-date{font-size:10px;color:var(--chalk-dim);margin-left:auto;}
+  .imp-stars{margin:7px 0 6px;font-size:14px;letter-spacing:2px;color:var(--flare);}
+  .imp-card .ic-text{font-size:13.5px;line-height:1.55;color:var(--chalk);}
+  .imp-del{font-size:11px;color:var(--chalk-dim);background:none;border:none;
+    font-family:inherit;margin-top:6px;padding:2px 0;}
+
+  /* ===== モーダル ===== */
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(4,18,13,.78);backdrop-filter:blur(4px);
+    z-index:100;display:none;align-items:flex-end;justify-content:center;
+  }
+  .modal-bg.open{display:flex;}
+  .modal{
+    background:linear-gradient(170deg,#0f4736,#0c3a2c);
+    border:1px solid var(--line);border-bottom:none;
+    border-radius:20px 20px 0 0;width:100%;max-width:520px;
+    padding:18px 18px calc(20px + env(safe-area-inset-bottom));
+    box-shadow:0 -10px 40px rgba(0,0,0,.5);animation:slideup .25s ease;
+  }
+  @keyframes slideup{from{transform:translateY(100%);}to{transform:none;}}
+  .modal h3{margin:2px 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .modal .sub{font-size:11.5px;color:var(--chalk-dim);margin-bottom:14px;}
+  .field-label{font-size:11px;color:var(--gold);font-weight:700;letter-spacing:.05em;
+    margin:4px 0 7px;text-transform:uppercase;}
+  .score-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .score-row .s-team{flex:1;font-size:13px;font-weight:700;text-align:center;}
+  .score-row input{
+    width:54px;text-align:center;font-size:20px;font-weight:800;color:var(--gold);
+    background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;
+    padding:8px 0;font-family:inherit;
+  }
+  .score-row .dash{color:var(--chalk-dim);font-weight:700;}
+  .star-pick{display:flex;gap:6px;margin-bottom:14px;font-size:26px;}
+  .star-pick span{cursor:pointer;color:var(--line);transition:.1s;}
+  .star-pick span.lit{color:var(--flare);}
+  textarea{
+    width:100%;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;
+    color:var(--chalk);font-family:inherit;font-size:14px;padding:11px;resize:vertical;
+    min-height:78px;line-height:1.5;
+  }
+  textarea::placeholder{color:var(--chalk-dim);}
+  .modal-actions{display:flex;gap:9px;margin-top:16px;}
+  .modal-actions button{
+    flex:1;font-family:inherit;font-weight:800;font-size:14px;border-radius:11px;
+    padding:13px;border:none;
+  }
+  .btn-save{background:var(--gold);color:#0a2a1f;}
+  .btn-ghost{background:rgba(0,0,0,.2);color:var(--chalk-dim);border:1px solid var(--line)!important;}
+
+  /* ===== データ管理 ===== */
+  .data-card{
+    background:linear-gradient(160deg,var(--card),var(--card-2));
+    border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:13px;
+  }
+  .data-card h4{margin:0 0 6px;font-size:14px;display:flex;align-items:center;gap:8px;}
+  .data-card p{margin:0 0 13px;font-size:12px;color:var(--chalk-dim);line-height:1.6;}
+  .data-card button,.data-card label{
+    display:block;width:100%;text-align:center;font-family:inherit;font-weight:700;
+    font-size:13.5px;border-radius:10px;padding:12px;border:1px solid var(--line);
+    background:rgba(0,0,0,.2);color:var(--chalk);cursor:pointer;
+  }
+  .data-card .btn-primary{background:var(--gold);color:#0a2a1f;border-color:var(--gold);}
+  /* テーマプレビューのグリッド */
+  .theme-preview{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:4px;
+  }
+  .tp-btn{
+    display:flex !important;align-items:center;gap:6px;width:auto !important;
+    padding:8px 8px !important;font-size:11.5px !important;text-align:left !important;
+    border-radius:9px !important;overflow:hidden;white-space:nowrap;
+  }
+  .tp-btn.active{border-color:var(--gold) !important;box-shadow:0 0 0 1px var(--gold);}
+  .tp-swatch{
+    width:18px;height:18px;border-radius:4px;flex:none;border:1px solid rgba(255,255,255,.25);
+  }
+  .tp-name{overflow:hidden;text-overflow:ellipsis;}
+  .data-card .btn-danger{color:var(--flare-soft);border-color:rgba(255,90,60,.4);}
+  textarea.io{min-height:120px;font-size:11px;font-family:ui-monospace,monospace;margin-top:10px;}
+  .toast{
+    position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));
+    transform:translateX(-50%) translateY(20px);
+    background:var(--gold);color:#0a2a1f;font-weight:800;font-size:13px;
+    padding:11px 20px;border-radius:999px;z-index:200;opacity:0;pointer-events:none;
+    transition:.25s;box-shadow:0 6px 20px rgba(0,0,0,.4);white-space:nowrap;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  footer{text-align:center;font-size:10px;color:var(--gold-dim);padding:22px 0 6px;}
+</style>
+</head>
+<body>
+
+<div id="team-bg"></div>
+<div id="flag-bg"></div>
+
+<header>
+  <p class="kicker">FIFA World Cup</p>
+  <h1 class="wc-title">
+    <span class="yr">2026</span>
+    <span class="wc">WORLD CUP</span>
+  </h1>
+  <p class="wc-sub">🏆 Match Viewing Tracker</p>
+  <p class="wc-hosts"><span class="flag">🇨🇦</span> Canada · <span class="flag">🇲🇽</span> Mexico · <span class="flag">🇺🇸</span> USA</p>
+  <div id="today-nation" class="today-nation"></div>
+  <div class="stat-row">
+    <div class="stat">視聴 <b id="stat-watched">0</b><span style="color:var(--chalk-dim)">/72</span></div>
+    <div class="stat flare">インパクト <b id="stat-impact">0</b></div>
+    <div class="stat">記録試合 <b id="stat-recorded">0</b></div>
+  </div>
+  <div class="stat-row">
+    <button id="fetch-btn" class="fetch-btn" onclick="fetchResults()">⟳ 最新の結果を取得</button>
+  </div>
+  <div id="fetch-status" class="fetch-status"></div>
+</header>
+
+<main>
+  <!-- ===== グループ表（順位表＋視聴記録 統合） ===== -->
+  <section class="view active" id="view-groups">
+    <div class="section-label">グループステージ</div>
+    <div id="groups-container"></div>
+  </section>
+
+  <!-- ===== ノックアウト ===== -->
+  <section class="view" id="view-knockout">
+    <div class="section-label">トーナメント表</div>
+    <div class="ko-note">
+      上下2つの山に分かれた<b>本物のトーナメント表</b>です。グループの全6試合が終わると1位・2位が左端に自動で入り、勝ったチームをタップすると右へ勝ち上がっていきます。各山は横スワイプで全ラウンド表示。スマホを横向きにすると大きく見えます。
+    </div>
+    <div id="knockout-container"></div>
+  </section>
+
+  <!-- ===== インパクト ===== -->
+  <section class="view" id="view-impact">
+    <div class="section-label">インパクト記録</div>
+    <div id="impact-container"></div>
+  </section>
+
+  <!-- ===== データ ===== -->
+  <section class="view" id="view-data">
+    <div class="section-label">データの保存・復元</div>
+    <div class="data-card">
+      <h4>⟳ 結果の自動取得について</h4>
+      <p>ヘッダーの「最新の結果を取得」ボタンで、公開データ（openfootball・APIキー不要）から確定したスコアを自動反映します。起動時にも自動で一度取得します。自分で入力したスコアは自動取得で上書きされません（「自動」タグの無いスコアは手動入力です）。視聴チェックとインパクト記録は常に手動で、あなただけの記録として残ります。</p>
+    </div>
+    <div class="data-card">
+      <h4>🎨 背景テーマのプレビュー</h4>
+      <p>各国の背景テーマを確認できます。国名をタップするとその国のテーマが背景に反映されます。「自動に戻す」で本日の主役国に戻ります。</p>
+      <div id="theme-preview" class="theme-preview"></div>
+      <button style="margin-top:10px" onclick="resetThemePreview()">自動に戻す（本日の主役国）</button>
+    </div>
+    <div class="data-card">
+      <h4>📤 書き出し（バックアップ）</h4>
+      <p>視聴記録・スコア・インパクト・ノックアウトのメモを1つのテキストにまとめます。スマホのメモ帳やファイルに貼り付けて保管してください。次回ここに貼り戻せば復元できます。</p>
+      <button class="btn-primary" onclick="exportData()">クリップボードにコピー</button>
+      <textarea class="io" id="export-box" readonly placeholder="ここに書き出し結果が表示されます"></textarea>
+    </div>
+    <div class="data-card">
+      <h4>📥 読み込み（復元）</h4>
+      <p>以前書き出したテキストを下に貼り付けて復元します。現在の記録は上書きされます。</p>
+      <textarea class="io" id="import-box" placeholder="バックアップのテキストをここに貼り付け"></textarea>
+      <button style="margin-top:10px" onclick="importData()">この内容で復元する</button>
+    </div>
+    <div class="data-card">
+      <h4>🗑 リセット</h4>
+      <p>すべての視聴記録・スコア・インパクト・メモを消去します。元に戻せません。</p>
+      <button class="btn-danger" onclick="resetData()">すべて消去</button>
+    </div>
+    <footer>記録はこの端末のブラウザ内に保持されます。機種変更・履歴削除に備えて時々バックアップを。</footer>
+  </section>
+</main>
+
+<nav>
+  <button class="active" data-v="groups"><span class="ic">📊</span>順位・記録</button>
+  <button data-v="knockout"><span class="ic">🏆</span>決勝T</button>
+  <button data-v="impact"><span class="ic">⚡</span>インパクト</button>
+  <button data-v="data"><span class="ic">💾</span>データ</button>
+</nav>
+
+<!-- 記録モーダル -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="m-title">試合を記録</h3>
+    <p class="sub" id="m-sub"></p>
+
+    <div class="field-label">スコア（任意）</div>
+    <div class="score-row">
+      <span class="s-team" id="m-home-name"></span>
+      <input type="number" id="m-home-score" min="0" inputmode="numeric" placeholder="-">
+      <span class="dash">—</span>
+      <input type="number" id="m-away-score" min="0" inputmode="numeric" placeholder="-">
+      <span class="s-team" id="m-away-name"></span>
+    </div>
+
+    <div class="field-label">インパクト度</div>
+    <div class="star-pick" id="m-stars">
+      <span data-s="1">★</span><span data-s="2">★</span><span data-s="3">★</span><span data-s="4">★</span><span data-s="5">★</span>
+    </div>
+
+    <div class="field-label">一言コメント</div>
+    <textarea id="m-comment" placeholder="例：モロッコの右サイドからのミドルが鳥肌もの。後半35分のゴールが完璧だった。"></textarea>
+
+    <button id="m-watch-toggle" class="watch-toggle" onclick="toggleModalWatch()">
+      <span class="wt-box">✓</span><span class="wt-text">この試合を視聴済みにする</span>
+    </button>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">閉じる</button>
+      <button class="btn-save" onclick="saveModal()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 3位選択シート -->
+<div class="modal-bg" id="sheet-bg">
+  <div class="modal">
+    <div id="sheet-body"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('sheet-bg').classList.remove('open')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   2026 FIFA World Cup — 試合データ（公式組分け・確定）
+   ============================================================ */
+const F = { // 国旗絵文字
+  MEX:"🇲🇽",RSA:"🇿🇦",KOR:"🇰🇷",CZE:"🇨🇿",
+  CAN:"🇨🇦",BIH:"🇧🇦",QAT:"🇶🇦",SUI:"🇨🇭",
+  BRA:"🇧🇷",MAR:"🇲🇦",HAI:"🇭🇹",SCO:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+  USA:"🇺🇸",PAR:"🇵🇾",AUS:"🇦🇺",TUR:"🇹🇷",
+  GER:"🇩🇪",CUW:"🇨🇼",CIV:"🇨🇮",ECU:"🇪🇨",
+  NED:"🇳🇱",JPN:"🇯🇵",SWE:"🇸🇪",TUN:"🇹🇳",
+  BEL:"🇧🇪",EGY:"🇪🇬",IRN:"🇮🇷",NZL:"🇳🇿",
+  ESP:"🇪🇸",CPV:"🇨🇻",URU:"🇺🇾",KSA:"🇸🇦",
+  FRA:"🇫🇷",SEN:"🇸🇳",NOR:"🇳🇴",IRQ:"🇮🇶",
+  ARG:"🇦🇷",ALG:"🇩🇿",AUT:"🇦🇹",JOR:"🇯🇴",
+  POR:"🇵🇹",COD:"🇨🇩",UZB:"🇺🇿",COL:"🇨🇴",
+  ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",CRO:"🇭🇷",GHA:"🇬🇭",PAN:"🇵🇦"
+};
+const N = { // 国名
+  MEX:"メキシコ",RSA:"南アフリカ",KOR:"韓国",CZE:"チェコ",
+  CAN:"カナダ",BIH:"ボスニア",QAT:"カタール",SUI:"スイス",
+  BRA:"ブラジル",MAR:"モロッコ",HAI:"ハイチ",SCO:"スコットランド",
+  USA:"アメリカ",PAR:"パラグアイ",AUS:"オーストラリア",TUR:"トルコ",
+  GER:"ドイツ",CUW:"キュラソー",CIV:"コートジボワール",ECU:"エクアドル",
+  NED:"オランダ",JPN:"日本",SWE:"スウェーデン",TUN:"チュニジア",
+  BEL:"ベルギー",EGY:"エジプト",IRN:"イラン",NZL:"ニュージーランド",
+  ESP:"スペイン",CPV:"カーボベルデ",URU:"ウルグアイ",KSA:"サウジアラビア",
+  FRA:"フランス",SEN:"セネガル",NOR:"ノルウェー",IRQ:"イラク",
+  ARG:"アルゼンチン",ALG:"アルジェリア",AUT:"オーストリア",JOR:"ヨルダン",
+  POR:"ポルトガル",COD:"コンゴ民主",UZB:"ウズベキスタン",COL:"コロンビア",
+  ENG:"イングランド",CRO:"クロアチア",GHA:"ガーナ",PAN:"パナマ"
+};
+const GROUPS = {
+  A:["MEX","RSA","KOR","CZE"], B:["CAN","BIH","QAT","SUI"],
+  C:["BRA","MAR","HAI","SCO"], D:["USA","PAR","AUS","TUR"],
+  E:["GER","CUW","CIV","ECU"], F:["NED","JPN","SWE","TUN"],
+  G:["BEL","EGY","IRN","NZL"], H:["ESP","CPV","URU","KSA"],
+  I:["FRA","SEN","NOR","IRQ"], J:["ARG","ALG","AUT","JOR"],
+  K:["POR","COD","UZB","COL"], L:["ENG","CRO","GHA","PAN"]
+};
+// 全72試合（日付 / グループ / ホーム / アウェイ）。各グループ総当たり6試合。
+// 主要試合は確定日程、その他はグループ標準パターンで配置。
+const MATCHES = [
+  // 6/11
+  {d:"6/11",g:"A",h:"MEX",a:"RSA"},{d:"6/11",g:"A",h:"KOR",a:"CZE"},
+  // 6/12
+  {d:"6/12",g:"B",h:"CAN",a:"BIH"},{d:"6/12",g:"B",h:"QAT",a:"SUI"},
+  {d:"6/13",g:"C",h:"BRA",a:"MAR"},{d:"6/13",g:"C",h:"HAI",a:"SCO"},
+  {d:"6/12",g:"D",h:"USA",a:"PAR"},{d:"6/13",g:"D",h:"AUS",a:"TUR"},
+  // 6/14
+  {d:"6/14",g:"E",h:"GER",a:"CUW"},{d:"6/14",g:"E",h:"CIV",a:"ECU"},
+  {d:"6/14",g:"F",h:"NED",a:"JPN"},{d:"6/14",g:"F",h:"SWE",a:"TUN"},
+  // 6/15
+  {d:"6/15",g:"G",h:"BEL",a:"EGY"},{d:"6/15",g:"G",h:"IRN",a:"NZL"},
+  {d:"6/15",g:"H",h:"ESP",a:"CPV"},{d:"6/15",g:"H",h:"URU",a:"KSA"},
+  // 6/16
+  {d:"6/16",g:"I",h:"FRA",a:"SEN"},{d:"6/16",g:"I",h:"IRQ",a:"NOR"},
+  {d:"6/16",g:"J",h:"ARG",a:"ALG"},{d:"6/16",g:"J",h:"AUT",a:"JOR"},
+  // 6/17
+  {d:"6/17",g:"K",h:"POR",a:"COD"},{d:"6/17",g:"K",h:"UZB",a:"COL"},
+  {d:"6/17",g:"L",h:"ENG",a:"CRO"},{d:"6/17",g:"L",h:"GHA",a:"PAN"},
+  // 第2節 6/18-6/23
+  {d:"6/18",g:"A",h:"CZE",a:"RSA"},{d:"6/18",g:"A",h:"MEX",a:"KOR"},
+  {d:"6/18",g:"B",h:"SUI",a:"BIH"},{d:"6/18",g:"B",h:"CAN",a:"QAT"},
+  {d:"6/19",g:"C",h:"SCO",a:"MAR"},{d:"6/19",g:"C",h:"BRA",a:"HAI"},
+  {d:"6/19",g:"D",h:"USA",a:"AUS"},{d:"6/19",g:"D",h:"TUR",a:"PAR"},
+  {d:"6/20",g:"E",h:"GER",a:"CIV"},{d:"6/20",g:"E",h:"ECU",a:"CUW"},
+  {d:"6/20",g:"F",h:"NED",a:"SWE"},{d:"6/20",g:"F",h:"TUN",a:"JPN"},
+  {d:"6/21",g:"G",h:"BEL",a:"IRN"},{d:"6/21",g:"G",h:"NZL",a:"EGY"},
+  {d:"6/21",g:"H",h:"ESP",a:"URU"},{d:"6/21",g:"H",h:"KSA",a:"CPV"},
+  {d:"6/22",g:"I",h:"FRA",a:"IRQ"},{d:"6/22",g:"I",h:"NOR",a:"SEN"},
+  {d:"6/22",g:"J",h:"ARG",a:"AUT"},{d:"6/22",g:"J",h:"JOR",a:"ALG"},
+  {d:"6/23",g:"K",h:"POR",a:"UZB"},{d:"6/23",g:"K",h:"COL",a:"COD"},
+  {d:"6/23",g:"L",h:"ENG",a:"GHA"},{d:"6/23",g:"L",h:"PAN",a:"CRO"},
+  // 第3節 6/24-6/27（同時刻開催）
+  {d:"6/24",g:"A",h:"RSA",a:"KOR"},{d:"6/24",g:"A",h:"CZE",a:"MEX"},
+  {d:"6/24",g:"B",h:"BIH",a:"QAT"},{d:"6/24",g:"B",h:"SUI",a:"CAN"},
+  {d:"6/25",g:"C",h:"MAR",a:"HAI"},{d:"6/25",g:"C",h:"SCO",a:"BRA"},
+  {d:"6/25",g:"D",h:"PAR",a:"AUS"},{d:"6/25",g:"D",h:"TUR",a:"USA"},
+  {d:"6/25",g:"E",h:"CUW",a:"CIV"},{d:"6/25",g:"E",h:"ECU",a:"GER"},
+  {d:"6/25",g:"F",h:"JPN",a:"SWE"},{d:"6/25",g:"F",h:"TUN",a:"NED"},
+  {d:"6/26",g:"G",h:"EGY",a:"IRN"},{d:"6/26",g:"G",h:"NZL",a:"BEL"},
+  {d:"6/26",g:"H",h:"CPV",a:"URU"},{d:"6/26",g:"H",h:"KSA",a:"ESP"},
+  {d:"6/26",g:"I",h:"NOR",a:"FRA"},{d:"6/26",g:"I",h:"SEN",a:"IRQ"},
+  {d:"6/27",g:"J",h:"ALG",a:"AUT"},{d:"6/27",g:"J",h:"JOR",a:"ARG"},
+  {d:"6/27",g:"K",h:"COL",a:"POR"},{d:"6/27",g:"K",h:"COD",a:"UZB"},
+  {d:"6/27",g:"L",h:"PAN",a:"ENG"},{d:"6/27",g:"L",h:"CRO",a:"GHA"}
+];
+MATCHES.forEach((m,i)=>m.id="m"+i);
+
+/* FIFAランキング（2026年6月11日公式版ベース・WC出場48か国の相対順位）*/
+const FIFA_RANK = {
+  ARG:1, ESP:2, FRA:3, ENG:4, POR:5, BRA:6, NED:7, MAR:8, BEL:9, GER:10,
+  CRO:11, COL:13, SEN:14, MEX:15, USA:17, URU:16, JPN:18, SUI:19, IRN:20,
+  KOR:23, ECU:24, AUT:25, AUS:26, NOR:28, EGY:30, CAN:30, SCO:33, PAN:34,
+  CIV:35, QAT:36, KSA:37, UZB:38, CPV:39, TUN:40, COD:41, IRQ:42, PAR:43,
+  HAI:44, RSA:45, CUW:46, NZL:47, JOR:48, GHA:32, ALG:31, BIH:27, SWE:22, CZE:21
+};
+/* 各国のイメージカラー（国旗・代表ユニフォームの基調色）*/
+/* 各国のホームユニフォーム（代表ホームキット）の基調色 [ベース, アクセント] */
+const TEAM_THEME = {
+  MEX:["#0a8a3f","#ffffff"],   // メキシコ：緑シャツ
+  RSA:["#1a7a3a","#ffd200"],   // 南アフリカ：緑×金
+  KOR:["#c8102e","#1a2a6c"],   // 韓国：赤シャツ
+  CZE:["#c8102e","#ffffff"],   // チェコ：赤シャツ
+  CAN:["#d80621","#000000"],   // カナダ：赤シャツ
+  BIH:["#10337a","#ffd200"],   // ボスニア：青シャツ
+  QAT:["#7a0c2e","#ffffff"],   // カタール：臙脂シャツ
+  SUI:["#d52b1e","#ffffff"],   // スイス：赤シャツ
+  BRA:["#ffd400","#0a6b3a"],   // ブラジル：黄シャツ
+  MAR:["#b8232f","#0a6b3a"],   // モロッコ：赤シャツ
+  HAI:["#10337a","#d21034"],   // ハイチ：青シャツ
+  SCO:["#0a378a","#ffffff"],   // スコットランド：濃紺シャツ
+  USA:["#ffffff","#1a2a6c"],   // アメリカ：白シャツ
+  PAR:["#c8102e","#10337a"],   // パラグアイ：赤白縦縞→赤基調
+  AUS:["#ffcd00","#0a6b3a"],   // オーストラリア：黄シャツ
+  TUR:["#d52b1e","#ffffff"],   // トルコ：赤シャツ
+  GER:["#ffffff","#101010"],   // ドイツ：白シャツ×黒
+  CUW:["#10337a","#ffd200"],   // キュラソー：青シャツ
+  CIV:["#f77f00","#ffffff"],   // コートジボワール：オレンジシャツ
+  ECU:["#ffd100","#0a378a"],   // エクアドル：黄シャツ
+  NED:["#f36c21","#ffffff"],   // オランダ：オレンジシャツ
+  JPN:["#1c3a7a","#e60026"],   // 日本：サムライブルー（青と認識できる濃紺）×赤
+  SWE:["#ffd200","#0a4fa0"],   // スウェーデン：黄シャツ×青
+  TUN:["#d52b1e","#ffffff"],   // チュニジア：赤シャツ
+  BEL:["#b8232f","#101010"],   // ベルギー：赤シャツ
+  EGY:["#c8102e","#ffffff"],   // エジプト：赤シャツ
+  IRN:["#ffffff","#1a7a3a"],   // イラン：白シャツ
+  NZL:["#101010","#ffffff"],   // ニュージーランド：黒シャツ
+  ESP:["#b8232f","#ffd200"],   // スペイン：赤シャツ
+  CPV:["#10337a","#ffffff"],   // カーボベルデ：青シャツ
+  URU:["#4a9fd4","#101010"],   // ウルグアイ：水色シャツ
+  KSA:["#0a6b3a","#ffffff"],   // サウジ：緑シャツ
+  FRA:["#1a2a6c","#d52b1e"],   // フランス：青シャツ
+  SEN:["#0a8a3f","#ffffff"],   // セネガル：緑/白シャツ
+  NOR:["#c8102e","#10337a"],   // ノルウェー：赤シャツ
+  IRQ:["#0a6b3a","#ffffff"],   // イラク：緑シャツ
+  ARG:["#6cace4","#ffffff"],   // アルゼンチン：水色×白縦縞
+  ALG:["#0a6b3a","#ffffff"],   // アルジェリア：緑/白シャツ
+  AUT:["#c8102e","#ffffff"],   // オーストリア：赤シャツ
+  JOR:["#c8102e","#ffffff"],   // ヨルダン：赤シャツ
+  POR:["#9a1230","#0a6b3a"],   // ポルトガル：臙脂シャツ
+  COD:["#1a7ad4","#ffd200"],   // コンゴ民主：青シャツ
+  UZB:["#0a8a3f","#1a9fc0"],   // ウズベキスタン：白/青
+  COL:["#ffd100","#1a2a6c"],   // コロンビア：黄シャツ
+  ENG:["#ffffff","#1a2a6c"],   // イングランド：白シャツ
+  CRO:["#d52b1e","#ffffff"],   // クロアチア：赤白チェッカー→赤基調
+  GHA:["#ffffff","#ce1126"],   // ガーナ：白シャツ
+  PAN:["#c8102e","#10337a"]    // パナマ：赤シャツ
+};
+const PITCH_THEME=["#0a3d2e","#11543e"]; // 平常時のピッチ
+function rankOf(code){ return FIFA_RANK[code]||99; }
+
+/* ============================================================
+   ユニフォーム風アクセント（背景に薄く敷く）
+/* ============================================================
+   各国の国旗パターン（CSSグラデーションで再現）
+   国旗は各国の公的シンボル。幾何学的な配色を背景に敷く。
+   FLAG_DEF[code] = [type, [colors...], extra?]
+   type: hband(横分割) / vband(縦分割) / cross(十字) / saltire(斜め十字)
+         disc(中央円) / diag(斜め2-3分割) / canton(左上ブロック+地)
+         stripesUS(米国型) / checker(市松) / vstripe(縦縞) / plus(スイス十字)
+         triLeft(左三角+横帯) / plain(単色グラデ)
+   ============================================================ */
+function bands(dir, cols){
+  const n=cols.length, w=100/n, parts=[];
+  cols.forEach((c,i)=>parts.push(`${c} ${i*w}%`,`${c} ${(i+1)*w}%`));
+  return `linear-gradient(${dir}, ${parts.join(",")})`;
+}
+function buildFlag(def){
+  if(!def) return null;
+  const [type, c, ex] = def;
+  switch(type){
+    case "hband": return bands("180deg", c);
+    case "vband": return bands("90deg", c);
+    case "disc":  // c=[地, 円]
+      return `radial-gradient(circle at 50% 42%, ${c[1]} 0 18%, transparent 18.4%), linear-gradient(${c[0]},${c[0]})`;
+    case "discDual": { // 韓国の太極旗：中央円(赤上/青下)＋黒の縁＋四隅の卦（黒ライン）
+      const base=c[0], red=c[1], blue=c[2], blk=c[3]||"#1a1a1a";
+      // 円は中央(50% 42%)、半径18%。赤(上半)＋青(下半)を斜め線で分ける
+      const cx="50%", cy="42%", R="18%";
+      return (
+        // 四隅の卦（黒い短いライン）を4本、斜めに配置
+        `linear-gradient(70deg, transparent 0 16%, ${blk} 16% 19%, transparent 19% 100%) 18% 22%/26% 18% no-repeat,`+
+        `linear-gradient(110deg, transparent 0 81%, ${blk} 81% 84%, transparent 84% 100%) 82% 22%/26% 18% no-repeat,`+
+        `linear-gradient(110deg, transparent 0 16%, ${blk} 16% 19%, transparent 19% 100%) 18% 62%/26% 18% no-repeat,`+
+        `linear-gradient(70deg, transparent 0 81%, ${blk} 81% 84%, transparent 84% 100%) 82% 62%/26% 18% no-repeat,`+
+        // 円の黒い縁（少し大きい黒円）
+        `radial-gradient(circle at ${cx} ${cy}, ${blk} 0 19.5%, transparent 20%),`+
+        // 円の上半=赤、下半=青を、斜め45度で二分
+        `conic-gradient(from 135deg at ${cx} ${cy}, ${red} 0 180deg, ${blue} 180deg 360deg),`+
+        // 上のconicは全面に出るので、円の外をbaseで隠すマスク代わりに base円外
+        `radial-gradient(circle at ${cx} ${cy}, transparent 0 18%, ${base} 18.3%),`+
+        `linear-gradient(${base},${base})`
+      );
+    }
+    case "discBand": // c=[上帯,下帯,円]
+      return `radial-gradient(circle at 50% 50%, ${c[2]} 0 13%, transparent 13.4%), ${bands("180deg",[c[0],c[1]])}`;
+    case "cross": { // c=[地, 十字] スカンジナビア十字（左寄り）
+      const base=c[0], x=c[1];
+      return `linear-gradient(90deg, transparent 30%, ${x} 30% 42%, transparent 42%),`+
+             `linear-gradient(180deg, transparent 42%, ${x} 42% 58%, transparent 58%),`+
+             `linear-gradient(${base},${base})`;
+    }
+    case "crossC": { // 中央十字（イングランド型）
+      const base=c[0], x=c[1];
+      return `linear-gradient(90deg, transparent 43%, ${x} 43% 57%, transparent 57%),`+
+             `linear-gradient(180deg, transparent 42%, ${x} 42% 58%, transparent 58%),`+
+             `linear-gradient(${base},${base})`;
+    }
+    case "saltire": { // 斜め十字（スコットランド）
+      const base=c[0], x=c[1];
+      return `linear-gradient(45deg, transparent 45%, ${x} 45% 55%, transparent 55%),`+
+             `linear-gradient(-45deg, transparent 45%, ${x} 45% 55%, transparent 55%),`+
+             `linear-gradient(${base},${base})`;
+    }
+    case "plus": { // スイス型 中央プラス
+      const base=c[0], p=c[1];
+      return `linear-gradient(90deg, transparent 40%, ${p} 40% 60%, transparent 60%) center/52% 52% no-repeat,`+
+             `linear-gradient(180deg, transparent 40%, ${p} 40% 60%, transparent 60%) center/52% 52% no-repeat,`+
+             `linear-gradient(${base},${base})`;
+    }
+    case "diag": { // 斜め2-3分割
+      const n=c.length, w=100/n, parts=[];
+      c.forEach((col,i)=>parts.push(`${col} ${i*w}%`,`${col} ${(i+1)*w}%`));
+      return `linear-gradient(135deg, ${parts.join(",")})`;
+    }
+    case "canton": // c=[地, カントン] 左上ブロック
+      return `linear-gradient(${c[1]},${c[1]}) left top/42% 50% no-repeat, linear-gradient(${c[0]},${c[0]})`;
+    case "stripesUS":
+      return `linear-gradient(${c[2]},${c[2]}) left top/40% 54% no-repeat,`+
+             `repeating-linear-gradient(180deg, ${c[0]} 0 7.7%, ${c[1]} 7.7% 15.4%)`;
+    case "checker":
+      { const s=(ex||54)*2; return `conic-gradient(${c[0]} 0 25%, ${c[1]} 0 50%, ${c[0]} 0 75%, ${c[1]} 0) 0 0 / ${s}px ${s}px`; }
+    case "vstripe":
+      { const n=ex||5, w=100/n, parts=[]; for(let i=0;i<n;i++){const col=(i%2===0)?c[0]:c[1]; parts.push(`${col} ${i*w}%`,`${col} ${(i+1)*w}%`);} return `linear-gradient(90deg, ${parts.join(",")})`; }
+    case "triLeft": { // 左に三角＋横帯（チェコ・南ア簡略）
+      const tri=c[2];
+      return `linear-gradient(135deg, ${tri} 0 28%, transparent 28%) left center/55% 100% no-repeat,`+
+             `${bands("180deg",[c[0],c[1]])}`;
+    }
+    case "triHoist": { // c=[上帯,下帯,三角] 左から伸びる三角＋上下2帯（チェコ型）
+      const tri=c[2];
+      return `conic-gradient(from 90deg at 0% 50%, ${tri} 0 30deg, transparent 30deg 330deg, ${tri} 330deg) ,`+
+             `${bands("180deg",[c[0],c[1]])}`;
+    }
+    case "hbandStar": { // c=[...帯, 星色] 横帯＋中央の星
+      const star=c[c.length-1], bandCols=c.slice(0,-1);
+      return `radial-gradient(circle at 50% 50%, ${star} 0 6%, transparent 6.4%),`+
+             `${bands("180deg",bandCols)}`;
+    }
+    case "vbandDisc": { // c=[左,中,右,円] 縦3帯＋中央の円/紋章位置
+      return `radial-gradient(circle at 50% 50%, ${c[3]} 0 8%, transparent 8.4%),`+
+             `${bands("90deg",[c[0],c[1],c[2]])}`;
+    }
+    case "quad": { // c=[白,赤,青] 四分割（左上白/右上赤/左下青/右下白）パナマ
+      const w=c[0], r=c[1], b=c[2];
+      return `linear-gradient(90deg, ${w} 50%, ${r} 50%) top / 100% 50% no-repeat,`+
+             `linear-gradient(90deg, ${b} 50%, ${w} 50%) bottom / 100% 50% no-repeat`;
+    }
+    case "plain":
+    default:
+      return `linear-gradient(160deg, ${c[0]} 0%, ${c[1]||c[0]} 100%)`;
+  }
+}
+
+/* 全48か国の国旗定義（特徴重視）。日本は日の丸を別処理。 */
+const FLAG_DEF = {
+  // グループA
+  MEX:["vband",["#006847","#ffffff","#ce1126"]],             // 緑白赤（中央紋章は省略）
+  RSA:["triHoist",["#de3831","#002395","#007a4d"]],          // 上赤/下青＋左の緑（Y字を簡略）
+  KOR:["discDual",["#ffffff","#cd2e3a","#0047a0","#1a1a1a"]], // 白地＋太極(赤上/青下)＋黒の卦
+  CZE:["triHoist",["#ffffff","#d7141a","#11457e"]],          // 上白/下赤＋左の青三角
+  // グループB
+  CAN:["vband",["#d80621","#ffffff","#d80621"]],             // 赤白赤（楓は省略）
+  BIH:["diag",["#002395","#fecb00"]],                        // 青地＋黄の斜め
+  QAT:["vband",["#ffffff","#8a1538","#8a1538"]],             // 白＋臙脂（境界はギザギザだが簡略）
+  SUI:["plus",["#d52b1e","#ffffff"]],                        // 赤地＋白十字
+  // グループC
+  BRA:["discBand",["#009c3b","#009c3b","#ffdf00"]],          // 緑地＋黄（ひし→円で簡略）
+  MAR:["plain",["#c1272d","#9a1226"]],                       // 赤地（緑の星は省略）
+  HAI:["hbandStar",["#00209f","#d21034","#ffffff"]],         // 青赤の横2分割＋中央
+  SCO:["saltire",["#0065bf","#ffffff"]],                     // 青地＋白の斜め十字
+  // グループD
+  USA:["stripesUS",["#b22234","#ffffff","#1a2a6c"]],         // 赤白縞＋左上紺
+  PAR:["hband",["#d52b1e","#ffffff","#0038a8"]],             // 赤白青の横三分割
+  AUS:["canton",["#00008b","#e4002b"]],                      // 紺地＋左上（簡略）
+  TUR:["plain",["#e30a17","#c00813"]],                       // 赤地（月星は省略）
+  // グループE
+  GER:["hband",["#000000","#dd0000","#ffce00"]],             // 黒赤金の横三分割
+  CUW:["hbandStar",["#002b7f","#002b7f","#f9d616","#002b7f","#ffffff"]], // 青地＋下寄りの黄帯（簡略）
+  CIV:["vband",["#f77f00","#ffffff","#009e60"]],             // 橙白緑の縦三分割
+  ECU:["hband",["#ffd100","#ffd100","#0072ce","#ef3340"]],   // 黄(上半)青赤
+  // グループF
+  NED:["hband",["#ae1c28","#ffffff","#21468b"]],             // 赤白青の横三分割
+  // JPN は日の丸を別処理
+  SWE:["cross",["#006aa7","#fecc00"]],                       // 青地＋黄の北欧十字
+  TUN:["disc",["#e70013","#ffffff"]],                        // 赤地＋白円（月星は省略）
+  // グループG
+  BEL:["vband",["#000000","#fdda24","#ef3340"]],             // 黒黄赤の縦三分割
+  EGY:["hband",["#ce1126","#ffffff","#000000"]],             // 赤白黒の横三分割
+  IRN:["hband",["#239f40","#ffffff","#da0000"]],             // 緑白赤の横三分割
+  NZL:["canton",["#00247d","#cc142b"]],                      // 紺地＋左上（簡略）
+  // グループH
+  ESP:["hband",["#aa151b","#f1bf00","#f1bf00","#aa151b"]],   // 赤黄赤（中央黄太め）
+  CPV:["hbandStar",["#003893","#ffffff","#003893","#cf2027","#003893","#f7d116"]], // 青＋白赤帯（簡略）
+  URU:["stripesUS",["#ffffff","#7cb9e8","#ffd83d"]],         // 白水色縞＋左上に太陽枠
+  KSA:["plain",["#006c35","#0a5c2e"]],                       // 緑地（剣・文字は省略）
+  // グループI
+  FRA:["vband",["#0055a4","#ffffff","#ef4135"]],             // 青白赤の縦三分割
+  SEN:["vband",["#00853f","#fdef42","#e31b23"]],             // 緑黄赤の縦三分割
+  NOR:["cross",["#ba0c2f","#ffffff"]],                       // 赤地＋白の北欧十字
+  IRQ:["hband",["#ce1126","#ffffff","#000000"]],             // 赤白黒の横三分割
+  // グループJ
+  ARG:["vstripe",["#7cb9e8","#ffffff"],5],                   // 水色×白の縦縞（ユニフォーム）
+  ALG:["vband",["#006233","#ffffff"]],                       // 緑白の縦2分割（月星省略）
+  AUT:["hband",["#ed2939","#ffffff","#ed2939"]],             // 赤白赤の横三分割
+  JOR:["hband",["#000000","#ffffff","#007a3d"]],             // 黒白緑の横三分割
+  // グループK
+  POR:["vband",["#006600","#006600","#da291c"]],             // 緑(左2/5)赤
+  COD:["diag",["#007fff","#f7d618","#ce1021"]],              // 青地＋黄赤の斜め
+  UZB:["hband",["#1eb53a","#ffffff","#0099b5"]],             // 緑白青の横三分割
+  COL:["hband",["#fcd116","#fcd116","#003893","#ce1126"]],   // 黄(上半)青赤
+  // グループL
+  ENG:["crossC",["#ffffff","#ce1124"]],                      // 白地＋赤の中央十字
+  CRO:["checker",["#d81e2c","#ffffff"],54],                  // 赤×白の市松（ユニフォーム）
+  GHA:["hbandStar",["#ce1126","#fcd116","#006b3f","#000000"]], // 赤金緑＋中央の黒星
+  PAN:["quad",["#ffffff","#d21034","#005293"]]               // 四分割（白赤/青白）
+};
+/* 旧 buildKitCSS は汎用フォールバックとして残す */
+function buildKitCSS(base, accent){
+  if(!base) return null;
+  const a = accent || base;
+  return (
+    `repeating-linear-gradient(125deg, transparent 0 46px, ${a}22 46px 50px, transparent 50px 96px),`+
+    `radial-gradient(120% 70% at 80% -10%, ${a}40 0%, transparent 55%),`+
+    `linear-gradient(125deg, transparent 38%, ${a}33 44%, ${a}33 52%, transparent 58%),`+
+    `linear-gradient(160deg, ${base} 0%, ${base} 100%)`
+  );
+}
+/* openfootball フィードの英語表記 → 内部コード対応表 */
+const EN2CODE = {
+  "Mexico":"MEX","South Africa":"RSA","South Korea":"KOR","Czech Republic":"CZE",
+  "Canada":"CAN","Bosnia & Herzegovina":"BIH","Qatar":"QAT","Switzerland":"SUI",
+  "Brazil":"BRA","Morocco":"MAR","Haiti":"HAI","Scotland":"SCO",
+  "USA":"USA","Paraguay":"PAR","Australia":"AUS","Turkey":"TUR",
+  "Germany":"GER","Curaçao":"CUW","Ivory Coast":"CIV","Ecuador":"ECU",
+  "Netherlands":"NED","Japan":"JPN","Sweden":"SWE","Tunisia":"TUN",
+  "Belgium":"BEL","Egypt":"EGY","Iran":"IRN","New Zealand":"NZL",
+  "Spain":"ESP","Cape Verde":"CPV","Uruguay":"URU","Saudi Arabia":"KSA",
+  "France":"FRA","Senegal":"SEN","Norway":"NOR","Iraq":"IRQ",
+  "Argentina":"ARG","Algeria":"ALG","Austria":"AUT","Jordan":"JOR",
+  "Portugal":"POR","DR Congo":"COD","Uzbekistan":"UZB","Colombia":"COL",
+  "England":"ENG","Croatia":"CRO","Ghana":"GHA","Panama":"PAN"
+};
+// 内部の試合を「ホーム,アウェイ」の正規化キーで引けるよう索引化
+const MATCH_BY_PAIR = {};
+MATCHES.forEach(m=>{ MATCH_BY_PAIR[[m.h,m.a].sort().join("_")]=m; });
+const FEED_URL = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json";
+
+/* ============================================================
+   ノックアウト構造（2026公式ブラケット・確定）
+   seed: グループ順位から自動流し込み。
+     "1A"=グループA1位, "2B"=グループB2位,
+     "3:A/B/C/D/F"=3位(対象グループのいずれか・手動)
+   src: 前ラウンド勝者から流し込み。"W74"=第74試合の勝者
+   ============================================================ */
+const BRACKET = {
+  r32:[
+    {m:73,a:{seed:"2A"}, b:{seed:"2B"}},
+    {m:74,a:{seed:"1E"}, b:{seed:"3:A/B/C/D/F"}},
+    {m:75,a:{seed:"1F"}, b:{seed:"2C"}},
+    {m:76,a:{seed:"1C"}, b:{seed:"2F"}},
+    {m:77,a:{seed:"1I"}, b:{seed:"3:C/D/F/G/H"}},
+    {m:78,a:{seed:"2E"}, b:{seed:"2I"}},
+    {m:79,a:{seed:"1A"}, b:{seed:"3:C/E/F/H/I"}},
+    {m:80,a:{seed:"1L"}, b:{seed:"3:E/H/I/J/K"}},
+    {m:81,a:{seed:"1D"}, b:{seed:"3:B/E/F/I/J"}},
+    {m:82,a:{seed:"1G"}, b:{seed:"3:A/E/H/I/J"}},
+    {m:83,a:{seed:"2K"}, b:{seed:"2L"}},
+    {m:84,a:{seed:"1H"}, b:{seed:"2J"}},
+    {m:85,a:{seed:"1B"}, b:{seed:"3:E/F/G/I/J"}},
+    {m:86,a:{seed:"1J"}, b:{seed:"2H"}},
+    {m:87,a:{seed:"1K"}, b:{seed:"3:D/E/I/J/L"}},
+    {m:88,a:{seed:"2D"}, b:{seed:"2G"}}
+  ],
+  r16:[
+    {m:89,a:{src:74}, b:{src:77}}, {m:90,a:{src:73}, b:{src:75}},
+    {m:91,a:{src:76}, b:{src:78}}, {m:92,a:{src:79}, b:{src:80}},
+    {m:93,a:{src:83}, b:{src:84}}, {m:94,a:{src:81}, b:{src:82}},
+    {m:95,a:{src:86}, b:{src:88}}, {m:96,a:{src:85}, b:{src:87}}
+  ],
+  qf:[
+    {m:97,a:{src:89}, b:{src:90}}, {m:98,a:{src:93}, b:{src:94}},
+    {m:99,a:{src:91}, b:{src:92}}, {m:100,a:{src:95}, b:{src:96}}
+  ],
+  sf:[
+    {m:101,a:{src:97}, b:{src:98}}, {m:102,a:{src:99}, b:{src:100}}
+  ],
+  third:[ {m:103,a:{srcL:101}, b:{srcL:102}} ],
+  final:[ {m:104,a:{src:101}, b:{src:102}} ]
+};
+const BRACKET_META = {
+  r32:{label:"ラウンド32",date:"6/28–7/3"},
+  r16:{label:"ラウンド16",date:"7/4–7/7"},
+  qf:{label:"準々決勝",date:"7/9–7/11"},
+  sf:{label:"準決勝",date:"7/14–7/15"},
+  third:{label:"3位決定戦",date:"7/18"},
+  final:{label:"決勝",date:"7/19"}
+};
+// 全試合をm番号で索引
+const BR_BY_M = {};
+Object.values(BRACKET).flat().forEach(g=>BR_BY_M[g.m]=g);
+
+/* ============================================================
+   状態（localStorageが使えればそこに、ダメでもメモリで動作）
+   ============================================================ */
+const STORE_KEY = "wc2026_tracker_v1";
+let state = { watched:{}, scores:{}, impacts:{}, ko:{}, koWin:{}, koTeam:{}, koScore:{}, manual:{} };
+let storageOK = false;
+try{
+  const t="__t";localStorage.setItem(t,"1");localStorage.removeItem(t);storageOK=true;
+  const saved=localStorage.getItem(STORE_KEY);
+  if(saved) state = Object.assign(state, JSON.parse(saved));
+}catch(e){ storageOK=false; }
+
+function persist(){
+  if(storageOK){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+}
+
+/* ============================================================
+   描画
+   ============================================================ */
+function teamCell(code){ return `<span class="flag">${F[code]}</span>${N[code]}`; }
+
+// 順位表の計算
+function computeTable(g){
+  const rows = {};
+  GROUPS[g].forEach(c=>rows[c]={c,P:0,W:0,D:0,L:0,GF:0,GA:0,Pts:0,form:[]});
+  // 試合は配列順（節順）に処理してフォームを正しい順序で蓄積
+  MATCHES.filter(m=>m.g===g).forEach(m=>{
+    const s=state.scores[m.id];
+    if(!s||s.h===""||s.a===""||s.h==null||s.a==null) return;
+    const h=+s.h,a=+s.a;
+    const rh=rows[m.h],ra=rows[m.a];
+    rh.P++;ra.P++;rh.GF+=h;rh.GA+=a;ra.GF+=a;ra.GA+=h;
+    if(h>a){rh.W++;ra.L++;rh.Pts+=3;rh.form.push("W");ra.form.push("L");}
+    else if(h<a){ra.W++;rh.L++;ra.Pts+=3;ra.form.push("W");rh.form.push("L");}
+    else{rh.D++;ra.D++;rh.Pts++;ra.Pts++;rh.form.push("D");ra.form.push("D");}
+  });
+  return Object.values(rows).sort((x,y)=>
+    y.Pts-x.Pts || (y.GF-y.GA)-(x.GF-x.GA) || y.GF-x.GF || x.c.localeCompare(y.c));
+}
+
+function renderGroups(){
+  const open = window._openGroups || (window._openGroups={A:true});
+  // 日付順モード
+  if(window._dateMode){ renderGroupsByDate(); return; }
+  let html=`<div class="view-toggle">
+    <button class="vt-btn active" onclick="setGroupMode(false)">グループ別</button>
+    <button class="vt-btn" onclick="setGroupMode(true)">日付順</button>
+  </div>`;
+  Object.keys(GROUPS).forEach(g=>{
+    const t=computeTable(g);
+    const played=MATCHES.filter(m=>m.g===g&&state.scores[m.id]&&state.scores[m.id].h!=="").length;
+    const done = played>=6;
+    const isOpen=open[g];
+    const leader = (played>0 && t[0].Pts>0) ? t[0].c : null;
+    // このグループの視聴済み数
+    const gMatches=MATCHES.filter(m=>m.g===g);
+    const watchedN=gMatches.filter(m=>state.watched[m.id]).length;
+    html+=`<div class="grp ${done?'grp-done':''}">
+      <div class="grp-head" onclick="toggleGroup('${g}')">
+        <span class="gname"><span class="gbadge">${g}</span>グループ${g}
+          ${leader?`<span class="leader-chip">👑 ${N[leader]}</span>`:''}
+        </span>
+        <span class="meta">${watchedN>0?`<span class="meta-watch">👁 ${watchedN}</span> `:''}${done?'<span class="meta-done">確定</span>':played+'/6'} ${isOpen?"▲":"▼"}</span>
+      </div>`;
+    if(isOpen){
+      html+=`<div class="tbl-wrap"><table class="ltable"><thead><tr>
+        <th class="rk">#</th><th class="tl">チーム</th>
+        <th>試</th><th>勝</th><th>分</th><th>敗</th>
+        <th>得</th><th>失</th><th class="gd-h">差</th><th class="pts-h">点</th>
+        <th class="form-h">近況</th>
+      </tr></thead><tbody>`;
+      t.forEach((r,i)=>{
+        const pos=i+1;
+        const zone = pos<=2?"q-auto": (pos===3?"q-third":"q-out");
+        const cut = pos===2?"cut-auto": (pos===3?"cut-third":"");
+        const gd=r.GF-r.GA;
+        const formHtml = r.form.slice(-5).map(f=>`<span class="fm fm-${f}">${f}</span>`).join("")
+          || '<span class="fm-none">—</span>';
+        html+=`<tr class="${zone} ${cut} ${pos===1&&played>0?'first':''}">
+          <td class="rk"><span class="rk-num rk-${zone}">${pos}</span></td>
+          <td class="team">${teamCell(r.c)}${pos<=2?'<span class="qdot auto"></span>':(pos===3?'<span class="qdot third"></span>':'')}</td>
+          <td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+          <td>${r.GF}</td><td>${r.GA}</td>
+          <td class="gd">${gd>0?"+":""}${gd}</td><td class="pts">${r.Pts}</td>
+          <td class="form">${formHtml}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table></div>
+      <div class="grp-foot">
+        <span><span class="qbadge auto">突破</span>上位2チームが決勝トーナメント直行</span>
+        <span><span class="qbadge third">3位通過圏</span>各組3位のうち成績上位8チームが進出</span>
+      </div>`;
+      // ▼ このグループの試合（タップで記録ポップアップ）
+      html+=`<div class="grp-matches"><div class="gm-label">この組の試合（タップで記録）</div>`;
+      gMatches.forEach(m=>html+=matchRow(m));
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  });
+  document.getElementById("groups-container").innerHTML=html;
+}
+
+// コンパクトな試合行（リーグ表内・タップでモーダル）
+function matchRow(m){
+  const w=state.watched[m.id];
+  const s=state.scores[m.id];
+  const imp=state.impacts[m.id];
+  const hasScore=s&&s.h!==""&&s.h!=null;
+  const isAuto=state.auto&&state.auto[m.id]&&!state.manual[m.id];
+  const ko=state.kickoff&&state.kickoff[m.id];
+  return `<div class="gm-row ${w?'gm-watched':''}" onclick="openModal('${m.id}')">
+    <div class="gm-main">
+      <span class="gm-date">${ko?`${ko.date}<br><b class="gm-jst">${ko.hm}</b>`:m.d}</span>
+      <span class="gm-team h">${N[m.h]}<span class="flag">${F[m.h]}</span></span>
+      <span class="gm-score">${hasScore?`${s.h}<i>-</i>${s.a}`:'<i class="vs">vs</i>'}</span>
+      <span class="gm-team a"><span class="flag">${F[m.a]}</span>${N[m.a]}</span>
+    </div>
+    <div class="gm-marks">
+      ${isAuto?'<span class="gm-auto">自動</span>':''}
+      ${imp?`<span class="gm-imp">⚡${imp.stars||''}</span>`:''}
+      ${w?'<span class="gm-eye">👁 視聴済</span>':'<span class="gm-tap">記録 ›</span>'}
+    </div>
+  </div>`;
+}
+
+// 日付順モード：日付ごとに全試合を並べる（記録ポップアップ対応）
+function renderGroupsByDate(){
+  let html=`<div class="view-toggle">
+    <button class="vt-btn" onclick="setGroupMode(false)">グループ別</button>
+    <button class="vt-btn active" onclick="setGroupMode(true)">日付順</button>
+  </div>`;
+  const byDay={};
+  MATCHES.forEach(m=>{(byDay[m.d]=byDay[m.d]||[]).push(m);});
+  Object.keys(byDay).forEach(day=>{
+    const wN=byDay[day].filter(m=>state.watched[m.id]).length;
+    html+=`<div class="dayhdr">📅 6月${day.split("/")[1]}日 <small>${byDay[day].length}試合${wN>0?` ・ 視聴${wN}`:''}</small></div>`;
+    html+=`<div class="grp-matches date-mode">`;
+    byDay[day].forEach(m=>{
+      // 日付順では組名も表示
+      html+=matchRowWithGroup(m);
+    });
+    html+=`</div>`;
+  });
+  document.getElementById("groups-container").innerHTML=html;
+}
+function matchRowWithGroup(m){
+  const w=state.watched[m.id];
+  const s=state.scores[m.id];
+  const imp=state.impacts[m.id];
+  const hasScore=s&&s.h!==""&&s.h!=null;
+  const isAuto=state.auto&&state.auto[m.id]&&!state.manual[m.id];
+  const ko=state.kickoff&&state.kickoff[m.id];
+  return `<div class="gm-row ${w?'gm-watched':''}" onclick="openModal('${m.id}')">
+    <div class="gm-main">
+      <span class="gm-grp">${m.g}組${ko?`<br><b class="gm-jst">${ko.hm}</b>`:''}</span>
+      <span class="gm-team h">${N[m.h]}<span class="flag">${F[m.h]}</span></span>
+      <span class="gm-score">${hasScore?`${s.h}<i>-</i>${s.a}`:'<i class="vs">vs</i>'}</span>
+      <span class="gm-team a"><span class="flag">${F[m.a]}</span>${N[m.a]}</span>
+    </div>
+    <div class="gm-marks">
+      ${isAuto?'<span class="gm-auto">自動</span>':''}
+      ${imp?`<span class="gm-imp">⚡${imp.stars||''}</span>`:''}
+      ${w?'<span class="gm-eye">👁 視聴済</span>':'<span class="gm-tap">記録 ›</span>'}
+    </div>
+  </div>`;
+}
+function setGroupMode(dateMode){
+  window._dateMode=dateMode;
+  renderGroups();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function toggleGroup(g){
+  window._openGroups[g]=!window._openGroups[g];
+  renderGroups();
+}
+
+// 順位表に統合済み。互換のため renderGroups に委譲。
+function renderSchedule(){ renderGroups(); }
+
+// グループ確定順位（全6試合消化時のみ team を返す）
+function groupRank(g, pos){ // pos: 1,2,3
+  const played = MATCHES.filter(m=>m.g===g && state.scores[m.id] && state.scores[m.id].h!=="" && state.scores[m.id].h!=null).length;
+  const t = computeTable(g);
+  if(played < 6) return null;       // 未確定
+  return t[pos-1] ? t[pos-1].c : null;
+}
+// シード文字列を解決： "1A"→チーム or null、"3:A/B/.."→手動枠
+function resolveSeed(seed){
+  if(seed.startsWith("3:")){
+    return {type:"third", label:seed.slice(2), team:null};
+  }
+  const pos=+seed[0], g=seed[1];
+  const t=groupRank(g,pos);
+  return {type:"grp", label:(pos+"位 グループ"+g), team:t};
+}
+// 試合の片側を解決 → {team, label}
+function resolveSide(side, mNo){
+  if(side.seed){
+    const r=resolveSeed(side.seed);
+    if(r.type==="third"){
+      // 3位は手動指定（state.third["<label>@m"]）
+      const key="3rd_"+mNo;
+      const manual=state.koTeam && state.koTeam[key];
+      return {team:manual||null, label:"3位 "+r.label, key};
+    }
+    return {team:r.team, label:r.label};
+  }
+  if(side.src!=null){       // 前ラウンド勝者
+    return {team: winnerOf(side.src), label:"第"+side.src+"勝者"};
+  }
+  if(side.srcL!=null){      // 準決勝敗者（3位決定戦）
+    return {team: loserOf(side.srcL), label:"第"+side.srcL+"敗者"};
+  }
+  return {team:null,label:""};
+}
+function winnerOf(mNo){ return (state.koWin&&state.koWin[mNo])||null; }
+function loserOf(mNo){
+  const g=BR_BY_M[mNo]; if(!g) return null;
+  const w=winnerOf(mNo); if(!w) return null;
+  const sa=resolveSide(g.a,mNo).team, sb=resolveSide(g.b,mNo).team;
+  if(w===sa) return sb; if(w===sb) return sa; return null;
+}
+
+function teamLabel(side){
+  if(side.team) return `<span class="flag">${F[side.team]||"🏳️"}</span><span class="t-name">${N[side.team]||side.team}</span>`;
+  return `<span class="t-tbd">${side.label}</span>`;
+}
+
+function koProgress(){
+  // 各ラウンドの決着数 / 総数
+  const out={};
+  ["r32","r16","qf","sf","third","final"].forEach(rk=>{
+    const all=BRACKET[rk];
+    const decided=all.filter(g=>winnerOf(g.m)).length;
+    out[rk]={decided,total:all.length};
+  });
+  return out;
+}
+
+// 左右の山ごとのラウンド構成（m番号）
+const HALVES = {
+  left:{
+    label:"上半分（準決勝①へ）",
+    cols:[
+      {rk:"r32", ms:[74,77, 73,75, 83,84, 81,82]},
+      {rk:"r16", ms:[89,90,93,94]},
+      {rk:"qf",  ms:[97,98]},
+      {rk:"sf",  ms:[101]}
+    ]
+  },
+  right:{
+    label:"下半分（準決勝②へ）",
+    cols:[
+      {rk:"r32", ms:[76,78, 79,80, 86,88, 85,87]},
+      {rk:"r16", ms:[91,92,95,96]},
+      {rk:"qf",  ms:[99,100]},
+      {rk:"sf",  ms:[102]}
+    ]
+  }
+};
+
+function brMatchCard(mNo, rk){
+  const g=BR_BY_M[mNo];
+  const A=resolveSide(g.a,mNo), B=resolveSide(g.b,mNo);
+  const w=winnerOf(mNo);
+  const aWin=w&&w===A.team, bWin=w&&w===B.team;
+  const sc=state.koScore&&state.koScore[mNo];
+  const ready=A.team&&B.team;
+  const need3=A.key||B.key;
+  return `<div class="br-card ${w?'decided':''} ${ready&&!w?'live':''} rk-${rk}">
+    <div class="br-top">
+      <span class="br-no">#${mNo}</span>
+      ${need3?`<button class="br-3rd" onclick="event.stopPropagation();pick3rd(${mNo})">3位選択</button>`
+              :(ready?`<button class="br-sc" onclick="event.stopPropagation();openKoScore(${mNo})">${sc?`${sc.a}-${sc.b}`:'⊕'}</button>`:'')}
+    </div>
+    <div class="br-team ${aWin?'win':(w?'lose':'')} ${A.team?'':'tbd'}" ${A.team?`onclick="pickWinner(${mNo},'${A.team}')"`:''}>
+      <span class="br-flag">${A.team?F[A.team]:'🏳️'}</span>
+      <span class="br-name">${A.team?N[A.team]:A.label}</span>
+      ${sc?`<span class="br-pts">${sc.a}</span>`:(aWin?'<span class="br-chk">✓</span>':'')}
+    </div>
+    <div class="br-team ${bWin?'win':(w?'lose':'')} ${B.team?'':'tbd'}" ${B.team?`onclick="pickWinner(${mNo},'${B.team}')"`:''}>
+      <span class="br-flag">${B.team?F[B.team]:'🏳️'}</span>
+      <span class="br-name">${B.team?N[B.team]:B.label}</span>
+      ${sc?`<span class="br-pts">${sc.b}</span>`:(bWin?'<span class="br-chk">✓</span>':'')}
+    </div>
+  </div>`;
+}
+
+function renderHalf(side){
+  const H=HALVES[side];
+  let cols="";
+  H.cols.forEach((col,ci)=>{
+    const meta=BRACKET_META[col.rk];
+    let cells="";
+    col.ms.forEach(mNo=>{ cells+=`<div class="br-slot">${brMatchCard(mNo,col.rk)}</div>`; });
+    cols+=`<div class="br-col col-${col.rk}" data-col="${ci}">
+      <div class="br-colhead">${meta.label}</div>
+      <div class="br-cells">${cells}</div>
+    </div>`;
+  });
+  return `<div class="br-half">
+    <div class="br-half-label">${side==='left'?'◤':'◢'} ${H.label}</div>
+    <div class="br-scroll"><div class="br-flow">${cols}</div></div>
+  </div>`;
+}
+
+function renderKnockout(){
+  const prog=koProgress();
+  const champ=winnerOf(104);
+  let html="";
+
+  // ロード・トゥ・ザ・ファイナル
+  const order=["r32","r16","qf","sf","final"];
+  html+=`<div class="road">
+    <div class="road-trophy ${champ?'lit':''}">🏆</div>
+    <div class="road-rail">`;
+  order.slice().reverse().forEach(rk=>{
+    const p=prog[rk], full=p.decided>=p.total;
+    const pct = p.total? Math.round(p.decided/p.total*100):0;
+    html+=`<div class="road-step ${full?'full':''}">
+      <span class="rs-label">${BRACKET_META[rk].label}</span>
+      <span class="rs-bar"><span style="width:${pct}%"></span></span>
+      <span class="rs-count">${p.decided}/${p.total}</span>
+    </div>`;
+  });
+  html+=`</div></div>`;
+
+  // チャンピオン
+  html+=`<div class="champ-box ${champ?'crowned':''}">
+    <div class="champ-cap">WORLD CHAMPION 2026</div>
+    <div class="champ-team">${champ?`<span class="flag">${F[champ]}</span> ${N[champ]}`:'？？？'}</div>
+    ${champ?'<div class="champ-confetti">🎉 🏆 🎉</div>':'<div class="champ-hint">決勝の勝者がここに輝きます</div>'}
+  </div>`;
+
+  // 決勝・3位決定戦（中央）
+  html+=`<div class="br-center">
+    <div class="br-final-wrap">
+      <div class="br-final-head">🏆 決勝 <span>${BRACKET_META.final.date}</span></div>
+      ${brMatchCard(104,'final')}
+    </div>
+    <div class="br-third-wrap">
+      <div class="br-third-head">3位決定戦 <span>${BRACKET_META.third.date}</span></div>
+      ${brMatchCard(103,'third')}
+    </div>
+  </div>`;
+
+  // 横スクロールのヒント
+  html+=`<div class="br-hint">← 横にスワイプで全ラウンド表示。横向き（ランドスケープ）にすると大きく見えます →</div>`;
+
+  // 上半分・下半分
+  html+=renderHalf("left");
+  html+=renderHalf("right");
+
+  document.getElementById("knockout-container").innerHTML=html;
+}
+
+// ノックアウトのスコア記録（任意・勝者は自動判定）
+let koScoreTarget=null;
+function openKoScore(mNo){
+  koScoreTarget=mNo;
+  const g=BR_BY_M[mNo];
+  const A=resolveSide(g.a,mNo), B=resolveSide(g.b,mNo);
+  const sc=(state.koScore&&state.koScore[mNo])||{a:"",b:""};
+  document.getElementById("sheet-body").innerHTML=`
+    <div class="sheet-title">第${mNo}試合 スコア記録</div>
+    <div class="sheet-sub">スコアを入れると勝者が自動で次のラウンドへ進みます（PK決着は勝者側を1点多く）。</div>
+    <div class="ko-score-row">
+      <span class="kss-team"><span class="flag">${F[A.team]}</span>${N[A.team]}</span>
+      <input type="number" id="kss-a" min="0" inputmode="numeric" value="${sc.a}">
+      <span class="dash">—</span>
+      <input type="number" id="kss-b" min="0" inputmode="numeric" value="${sc.b}">
+      <span class="kss-team away"><span class="flag">${F[B.team]}</span>${N[B.team]}</span>
+    </div>
+    <button class="btn-save sheet-save" onclick="saveKoScore()">記録する</button>`;
+  document.getElementById("sheet-bg").classList.add("open");
+}
+function saveKoScore(){
+  const mNo=koScoreTarget;
+  const a=document.getElementById("kss-a").value, b=document.getElementById("kss-b").value;
+  const g=BR_BY_M[mNo];
+  const A=resolveSide(g.a,mNo), B=resolveSide(g.b,mNo);
+  if(a===""||b===""){ toast("両方のスコアを入力してください"); return; }
+  state.koScore=state.koScore||{};
+  state.koScore[mNo]={a:+a,b:+b};
+  state.koWin=state.koWin||{};
+  if(+a>+b) state.koWin[mNo]=A.team;
+  else if(+b>+a) state.koWin[mNo]=B.team;
+  else { toast("引き分けでは勝者が決まりません（PK勝者を1点多く）"); return; }
+  cleanupDownstream();persist();
+  closeSheet();renderKnockout();
+  toast("記録しました");
+}
+function closeSheet(){ document.getElementById("sheet-bg").classList.remove("open"); }
+
+function pickWinner(mNo, team){
+  state.koWin=state.koWin||{};
+  if(state.koWin[mNo]===team){ delete state.koWin[mNo]; if(state.koScore)delete state.koScore[mNo]; }  // 取り消し
+  else { state.koWin[mNo]=team; }
+  // 下流の勝者が前提を失ったらクリア
+  cleanupDownstream();
+  persist();renderKnockout();
+}
+function cleanupDownstream(){
+  // 勝者が現存しないsrc参照を持つ試合の勝者を消す（簡易整合）
+  let changed=true;
+  while(changed){
+    changed=false;
+    Object.values(BRACKET).flat().forEach(g=>{
+      const w=state.koWin&&state.koWin[g.m]; if(!w) return;
+      const A=resolveSide(g.a,g.m), B=resolveSide(g.b,g.m);
+      if(w!==A.team && w!==B.team){ delete state.koWin[g.m]; changed=true; }
+    });
+  }
+}
+// 3位チーム選択（対象グループの3位から）
+let pick3rdTarget=null;
+function pick3rd(mNo){
+  const g=BR_BY_M[mNo];
+  const side = g.a.seed&&g.a.seed.startsWith("3:")?g.a:g.b;
+  const groups=side.seed.slice(2).split("/");
+  // 対象グループの「3位」を候補に（確定していれば実チーム名、未確定はグループ名）
+  const opts=groups.map(gr=>{
+    const t=groupRank(gr,3);
+    return {gr, team:t};
+  });
+  pick3rdTarget={mNo,key:"3rd_"+mNo};
+  let html=`<div class="sheet-title">第${mNo}試合に入る3位チーム</div>
+    <div class="sheet-sub">対象グループの3位から選択（FIFA規定で実際の振り分けは大会終了時に確定します）</div>
+    <div class="opt-list">`;
+  opts.forEach(o=>{
+    const label = o.team ? `${F[o.team]} ${N[o.team]}（${o.gr}組3位）` : `グループ${o.gr} の3位（未確定）`;
+    const val = o.team || "";
+    html+=`<button class="opt" ${o.team?`onclick="set3rd('${o.team}')"`:'disabled'}>${label}</button>`;
+  });
+  html+=`<button class="opt clear" onclick="set3rd('')">未設定に戻す</button></div>`;
+  document.getElementById("sheet-body").innerHTML=html;
+  document.getElementById("sheet-bg").classList.add("open");
+}
+function set3rd(team){
+  state.koTeam=state.koTeam||{};
+  if(team){ state.koTeam[pick3rdTarget.key]=team; }
+  else { delete state.koTeam[pick3rdTarget.key]; }
+  cleanupDownstream();persist();
+  document.getElementById("sheet-bg").classList.remove("open");
+  renderKnockout();
+}
+
+function renderImpact(){
+  const items=Object.keys(state.impacts).map(id=>({id,...state.impacts[id]}))
+    .sort((a,b)=>(b.ts||0)-(a.ts||0));
+  if(items.length===0){
+    document.getElementById("impact-container").innerHTML=
+      `<div class="impact-empty"><div class="big">⚡</div>
+      まだインパクト記録はありません。<br>日程タブで心を動かされた試合に<br>一言コメントを残しましょう。</div>`;
+    return;
+  }
+  let html="";
+  items.forEach(it=>{
+    const m=MATCHES.find(x=>x.id===it.id);
+    if(!m)return;
+    html+=`<div class="imp-card">
+      <div class="ic-match">
+        <span class="flag">${F[m.h]}</span>${N[m.h]}
+        <span style="color:var(--chalk-dim);font-weight:500">vs</span>
+        ${N[m.a]}<span class="flag">${F[m.a]}</span>
+        <span class="ic-date">6月${m.d.split("/")[1]}日 · G${m.g}</span>
+      </div>
+      <div class="imp-stars">${"★".repeat(it.stars||0)}${"☆".repeat(5-(it.stars||0))}</div>
+      <div class="ic-text">${escapeHtml(it.text||"")}</div>
+      <button class="imp-del" onclick="delImpact('${it.id}')">削除</button>
+    </div>`;
+  });
+  document.getElementById("impact-container").innerHTML=html;
+}
+function delImpact(id){
+  if(!confirm("この記録を削除しますか？"))return;
+  delete state.impacts[id];persist();renderImpact();renderSchedule();updateStats();
+}
+
+function updateStats(){
+  document.getElementById("stat-watched").textContent=Object.keys(state.watched).filter(k=>state.watched[k]).length;
+  document.getElementById("stat-impact").textContent=Object.keys(state.impacts).length;
+  const rec=new Set([...Object.keys(state.watched).filter(k=>state.watched[k]),...Object.keys(state.impacts)]);
+  document.getElementById("stat-recorded").textContent=rec.size;
+}
+
+function renderAll(){renderGroups();renderKnockout();renderImpact();updateStats();applyTeamTheme();}
+
+/* ============================================================
+   背景テーマ：その日の試合・勝ち残り国に応じて国カラーを反映
+   優先順位：①日本戦があれば日本 ②その日の試合でFIFA上位国
+            ③試合がない日はノックアウト勝ち残りの上位国
+            ④それも無ければランダムな出場国
+   ============================================================ */
+function tournamentDateKey(){
+  // 実日付を大会の "M/D" 形式に。範囲外なら null。
+  const now=new Date();
+  const y=now.getFullYear(), mo=now.getMonth()+1, d=now.getDate();
+  if(y!==2026) return null;
+  if(mo===6 && d>=11) return `6/${d}`;
+  if(mo===7 && d<=19) return `7/${d}`;
+  return null;
+}
+function teamsPlayingOn(dKey){
+  const set=new Set();
+  MATCHES.filter(m=>m.d===dKey).forEach(m=>{ set.add(m.h); set.add(m.a); });
+  return [...set];
+}
+function aliveTeams(){
+  // ノックアウトでまだ負けていない＝勝者として残っている国（決勝T）
+  const alive=new Set();
+  // グループ突破チーム（確定分）＋各試合の勝者
+  Object.values(BRACKET).flat().forEach(g=>{
+    const w=winnerOf(g.m); if(w) alive.add(w);
+  });
+  return [...alive];
+}
+function highestRanked(codes){
+  if(!codes.length) return null;
+  return codes.slice().sort((a,b)=>rankOf(a)-rankOf(b))[0];
+}
+let _themeOverride = null; // プレビュー用：指定があればそのチームを主役にする
+function pickThemeTeam(){
+  if(_themeOverride) return {code:_themeOverride, reason:"プレビュー"};
+  const dKey=tournamentDateKey();
+  // ①②その日の試合
+  if(dKey){
+    const playing=teamsPlayingOn(dKey);
+    if(playing.length){
+      if(playing.includes("JPN")) return {code:"JPN", reason:"日本戦"};
+      return {code:highestRanked(playing), reason:"本日の注目"};
+    }
+  }
+  // ③ノックアウト勝ち残り
+  const alive=aliveTeams();
+  if(alive.length){
+    if(alive.includes("JPN")) return {code:"JPN", reason:"勝ち残り"};
+    return {code:highestRanked(alive), reason:"勝ち残り"};
+  }
+  // ④ランダム出場国（日替わりで安定させるため日付シード）
+  const all=Object.keys(TEAM_THEME);
+  const seed=dKey? dKey.split("/")[1]|0 : (new Date().getDate());
+  const code=all[seed % all.length];
+  return {code, reason:"出場国"};
+}
+// HEX→{r,g,b}
+function hex2rgb(h){h=h.replace("#","");if(h.length===3)h=h.split("").map(c=>c+c).join("");
+  return {r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};}
+function rgb2hex(r,g,b){const c=v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0");return "#"+c(r)+c(g)+c(b);}
+// 文字が読めるよう、国カラーを暗く落とす（targetは目標の明るさ係数 0–1）
+function darken(hex, factor){
+  const {r,g,b}=hex2rgb(hex);
+  // 一旦HSL的に暗くしつつ、彩度はやや残す。単純に係数を掛ける。
+  return rgb2hex(r*factor, g*factor, b*factor);
+}
+// 2色を混ぜる
+function mix(h1,h2,t){const a=hex2rgb(h1),b=hex2rgb(h2);
+  return rgb2hex(a.r+(b.r-a.r)*t, a.g+(b.g-a.g)*t, a.b+(b.b-a.b)*t);}
+
+function applyTeamTheme(){
+  const pick=pickThemeTeam();
+  const theme = pick&&TEAM_THEME[pick.code] ? TEAM_THEME[pick.code] : PITCH_THEME;
+  const c1=theme[0], c2=theme[1];
+  const code = pick&&pick.code;
+  const lum=v=>{const {r,g,b}=hex2rgb(v);return (0.299*r+0.587*g+0.114*b)/255;};
+  // 全48か国が国旗パターンを持つ。日本は日の丸を別処理。
+  const flagDef = code && code!=="JPN" ? FLAG_DEF[code] : null;
+  const hasPattern = code==="JPN" || !!flagDef;
+
+  // 文字が読めるよう、背景は常に暗いトーンにする（基調色を活かしつつ暗く）
+  let dark1,dark2,deep,card,card2,line;
+  {
+    // 背景の基調：暗めの色を選ぶ（明るすぎる基調色なら第2色やニュートラルに）
+    let baseForBg = c1;
+    if(lum(c1)>0.6) baseForBg = (c2 && lum(c2)<0.6) ? c2 : "#1a2433";
+    dark1 = mix(darken(baseForBg,.62), "#0c1418", .14);
+    dark2 = mix(darken(baseForBg,.40), "#0a1014", .28);
+    deep  = "#070d11";
+    card  = mix(darken(baseForBg,.30), "#10171c", .62);
+    card2 = mix(darken(baseForBg,.34), "#0e151a", .58);
+    line  = mix(darken(baseForBg,.55), "#243036", .50);
+  }
+  document.body.classList.remove("light-theme"); // 常に暗テーマで統一
+  document.body.style.setProperty("--team-1", c1);
+  document.body.style.setProperty("--team-2", c2);
+  document.body.style.setProperty("--team-dark1", dark1);
+  document.body.style.setProperty("--team-dark2", dark2);
+  document.body.style.setProperty("--team-deep", deep);
+  document.body.style.setProperty("--card", card);
+  document.body.style.setProperty("--card-2", card2);
+  document.body.style.setProperty("--line", line);
+  // 背景レイヤー：日本=日の丸、それ以外=各国の国旗パターン
+  const flagEl=document.getElementById("flag-bg");
+  if(flagEl){
+    if(code==="JPN"){
+      const red = c2 || "#e60026";
+      flagEl.style.background =
+        `radial-gradient(circle at 50% 30%, ${red} 0 21%, transparent 21.4%),`+
+        `linear-gradient(160deg, ${c1} 0%, ${c1} 100%)`;
+      flagEl.style.opacity = ".85";
+    } else if(flagDef){
+      flagEl.style.background = buildFlag(flagDef);
+      flagEl.style.opacity = ".6";   // 国旗をしっかり見せる
+    } else {
+      const css = code ? buildKitCSS(c1, c2) : null;
+      if(css){ flagEl.style.background=css; flagEl.style.opacity=".3"; }
+      else { flagEl.style.background="none"; flagEl.style.opacity="0"; }
+    }
+  }
+  const badge=document.getElementById("today-nation");
+  if(badge){
+    if(pick && N[pick.code]){
+      badge.innerHTML=`<span class="tn-label">${pick.reason}</span><span class="tn-flag">${F[pick.code]}</span>${N[pick.code]}`;
+    } else { badge.innerHTML=""; }
+  }
+}
+
+// テーマプレビューのグリッドを生成（全48か国＋スウォッチ）
+function buildThemePreview(){
+  const host=document.getElementById("theme-preview");
+  if(!host) return;
+  const codes=Object.keys(TEAM_THEME);
+  host.innerHTML = codes.map(code=>{
+    const [c1,c2]=TEAM_THEME[code];
+    // スウォッチは基調色＋アクセントの2分割
+    const sw=`background:linear-gradient(135deg, ${c1} 0 50%, ${c2||c1} 50% 100%);`;
+    const on = _themeOverride===code ? "active" : "";
+    return `<button class="tp-btn ${on}" onclick="previewTheme('${code}')">
+      <span class="tp-swatch" style="${sw}"></span>
+      <span class="tp-name">${N[code]}</span>
+    </button>`;
+  }).join("");
+}
+function previewTheme(code){
+  _themeOverride = code;
+  applyTeamTheme();
+  buildThemePreview();
+  // ヘッダーが見えるよう先頭へ
+  window.scrollTo({top:0,behavior:"smooth"});
+  toast(`${N[code]} のテーマを表示中`);
+}
+function resetThemePreview(){
+  _themeOverride = null;
+  applyTeamTheme();
+  buildThemePreview();
+  toast("本日の主役国に戻しました");
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+function quickWatch(id){
+  state.watched[id]=!state.watched[id];
+  persist();renderSchedule();updateStats();
+  toast(state.watched[id]?"視聴済みにしました":"視聴チェックを外しました");
+}
+
+let modalId=null, modalStars=0, modalWatch=false;
+function openModal(id){
+  modalId=id;
+  const m=MATCHES.find(x=>x.id===id);
+  const imp=state.impacts[id]||{};
+  const s=state.scores[id]||{};
+  document.getElementById("m-title").innerHTML=`⚡ 試合を記録`;
+  const ko=state.kickoff&&state.kickoff[id];
+  document.getElementById("m-sub").textContent=`${N[m.h]} vs ${N[m.a]} ・ グループ${m.g}${ko?` ・ ${ko.date} ${ko.hm} 〜（日本時間）`:` ・ 6月${m.d.split("/")[1]}日`}`;
+  document.getElementById("m-home-name").innerHTML=`${F[m.h]} ${N[m.h]}`;
+  document.getElementById("m-away-name").innerHTML=`${F[m.a]} ${N[m.a]}`;
+  document.getElementById("m-home-score").value = s.h??"";
+  document.getElementById("m-away-score").value = s.a??"";
+  document.getElementById("m-comment").value = imp.text||"";
+  modalStars = imp.stars||0;
+  modalWatch = !!state.watched[id];
+  paintStars();
+  paintWatch();
+  document.getElementById("modal-bg").classList.add("open");
+}
+function paintWatch(){
+  document.getElementById("m-watch-toggle").classList.toggle("on", modalWatch);
+}
+function toggleModalWatch(){ modalWatch=!modalWatch; paintWatch(); }
+function paintStars(){
+  document.querySelectorAll("#m-stars span").forEach(sp=>{
+    sp.classList.toggle("lit", +sp.dataset.s<=modalStars);
+  });
+}
+document.querySelectorAll("#m-stars span").forEach(sp=>{
+  sp.addEventListener("click",()=>{
+    modalStars = (+sp.dataset.s===modalStars)?0:+sp.dataset.s; paintStars();
+  });
+});
+function closeModal(){document.getElementById("modal-bg").classList.remove("open");modalId=null;}
+document.getElementById("modal-bg").addEventListener("click",e=>{
+  if(e.target.id==="modal-bg")closeModal();
+});
+function saveModal(){
+  const id=modalId;const m=MATCHES.find(x=>x.id===id);
+  const h=document.getElementById("m-home-score").value;
+  const a=document.getElementById("m-away-score").value;
+  const text=document.getElementById("m-comment").value.trim();
+  // スコア（手動入力はmanualに記録し、自動取得で上書きされないようにする）
+  if(h!==""||a!==""){ state.scores[id]={h:h===""?"":+h, a:a===""?"":+a}; state.manual[id]=true; }
+  // インパクト（コメントか星があれば保存）
+  if(text||modalStars>0){
+    state.impacts[id]={text,stars:modalStars,ts:Date.now()};
+  }else{
+    delete state.impacts[id];
+  }
+  if(modalWatch){ state.watched[id]=true; } else { delete state.watched[id]; }
+  persist();renderAll();closeModal();
+  toast("保存しました");
+}
+
+/* ============================================================
+   データ入出力
+   ============================================================ */
+function exportData(){
+  const json=JSON.stringify(state);
+  document.getElementById("export-box").value=json;
+  try{
+    navigator.clipboard.writeText(json).then(
+      ()=>toast("コピーしました"),
+      ()=>toast("下のテキストを手動でコピーしてください")
+    );
+  }catch(e){ toast("下のテキストを手動でコピーしてください"); }
+}
+function importData(){
+  const raw=document.getElementById("import-box").value.trim();
+  if(!raw){toast("貼り付けてください");return;}
+  try{
+    const obj=JSON.parse(raw);
+    state=Object.assign({watched:{},scores:{},impacts:{},ko:{},koWin:{},koTeam:{},koScore:{},manual:{},auto:{}},obj);
+    persist();renderAll();
+    document.getElementById("import-box").value="";
+    toast("復元しました");
+  }catch(e){ toast("テキストの形式が正しくありません"); }
+}
+function resetData(){
+  if(!confirm("すべての記録を消去します。よろしいですか？"))return;
+  state={watched:{},scores:{},impacts:{},ko:{},koWin:{},koTeam:{},koScore:{},manual:{},auto:{}};
+  persist();renderAll();toast("リセットしました");
+}
+
+/* ============================================================
+   結果の自動取得（openfootball 公開データ・キー不要）
+   ============================================================ */
+let lastFetch = null;
+// フィードの "13:00 UTC-6" 形式 ＋ 日付 を日本時間(JST)に変換
+// 戻り値: {date:"6/12", hm:"04:00", nextDay:true/false}
+function toJST(dateStr, timeStr){
+  try{
+    const mm = timeStr.match(/(\d{1,2}):(\d{2})\s*UTC([+-]\d{1,2})/);
+    if(!mm) return null;
+    const [_, hh, mi, off] = mm;
+    const [Y,M,D] = dateStr.split("-").map(Number);
+    // 現地時刻をUTCへ：UTC = local - offset。JST = UTC + 9
+    // 例) 13:00 UTC-6 → UTC 19:00 → JST翌4:00
+    const utcMs = Date.UTC(Y, M-1, D, +hh - (+off), +mi);
+    const jst = new Date(utcMs + 9*3600*1000);
+    const jm = jst.getUTCMonth()+1, jd = jst.getUTCDate();
+    const jh = String(jst.getUTCHours()).padStart(2,"0");
+    const jmin = String(jst.getUTCMinutes()).padStart(2,"0");
+    return { date:`${jm}/${jd}`, hm:`${jh}:${jmin}` };
+  }catch(e){ return null; }
+}
+async function fetchResults(){
+  const btn=document.getElementById("fetch-btn");
+  const st=document.getElementById("fetch-status");
+  btn.classList.add("loading");btn.disabled=true;
+  st.classList.remove("err");st.textContent="取得中…";
+  try{
+    const res=await fetch(FEED_URL,{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    let updated=0, skipped=0, unmatched=0;
+    (data.matches||[]).forEach(fm=>{
+      const c1=EN2CODE[fm.team1], c2=EN2CODE[fm.team2];
+      if(!c1||!c2) return;                          // 決勝T等のプレースホルダ
+      const m=MATCH_BY_PAIR[[c1,c2].sort().join("_")];
+      if(!m){ unmatched++; return; }
+      // キックオフ時刻を日本時間に変換して保存（全試合・結果有無に関わらず）
+      if(fm.date && fm.time){
+        const jst=toJST(fm.date, fm.time);
+        if(jst){ state.kickoff=state.kickoff||{}; state.kickoff[m.id]=jst; }
+      }
+      const ft=fm.score&&fm.score.ft;
+      if(!ft||ft.length<2) return;                 // 未消化はスコア更新スキップ
+      if(state.manual[m.id]){ skipped++; return; }  // 手動入力は尊重
+      // フィードのhome/awayをこちらの並びに合わせる
+      const hi = (fm.team1===enName(m.h)) ? 0 : 1;
+      const sh = ft[hi], sa = ft[1-hi];
+      const cur=state.scores[m.id];
+      if(!cur || cur.h!==sh || cur.a!==sa){
+        state.scores[m.id]={h:sh,a:sa};
+        state.auto=state.auto||{}; state.auto[m.id]=true;
+        updated++;
+      }
+    });
+    persist();renderAll();
+    lastFetch=new Date();
+    const tlabel=lastFetch.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+    st.textContent=`更新${updated}件 ${skipped?`／手動入力は保持${skipped}件`:""}・${tlabel}取得`;
+    toast(updated>0?`${updated}件の結果を反映`:"新しい結果はありません");
+  }catch(e){
+    st.classList.add("err");
+    st.textContent="取得できませんでした（通信環境をご確認ください）。手動入力は引き続き可能です。";
+    toast("取得に失敗しました");
+  }finally{
+    btn.classList.remove("loading");btn.disabled=false;
+  }
+}
+function enName(code){ // code→英語名（逆引き）
+  for(const k in EN2CODE){ if(EN2CODE[k]===code) return k; }
+  return "";
+}
+
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>(
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove("show"),1800);
+}
+document.querySelectorAll("nav button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById("view-"+b.dataset.v).classList.add("active");
+    if(b.dataset.v==="data") buildThemePreview();
+    window.scrollTo({top:0,behavior:"smooth"});
+  });
+});
+
+renderAll();
+// 起動時に一度だけ最新結果を自動取得（失敗しても手動入力は可能）
+fetchResults();
+</script>
+</body>
+</html>
